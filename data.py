@@ -1,15 +1,15 @@
 import requests
 import pandas as pd
 import time
+import os
+from dotenv import load_dotenv
 
-# -----------------------------------------------------------------
-# (사전 준비 1) 한투 API 인증 (재현님이 채워주세요)
-# -----------------------------------------------------------------
-# 재현님의 APP_KEY와 APP_SECRET를 입력하세요.
-APP_KEY = 'YOUR_APP_KEY'
-APP_SECRET = 'YOUR_APP_SECRET'
-BASE_URL = 'https://openapi.koreainvestment.com:9443'  # 실전투자 기준
+# (사전 준비 1) .env 파일에서 API 키 불러오기
+load_dotenv()
 
+APP_KEY = os.getenv('APP_KEY')
+APP_SECRET = os.getenv('APP_SECRET')
+BASE_URL = 'https://openapi.koreainvestment.com:9443' # 실전투자 기준
 
 # 최초 1회 토큰 발급 함수
 def get_access_token():
