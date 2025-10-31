@@ -1,0 +1,29 @@
+# 1. 파이썬 가상환경 (Virtual Environments)
+# (가상환경 폴더 이름이 venv, .venv 등이면 무시합니다)
+venv/
+.venv/
+env/
+.env/
+
+# 2. 파이썬 캐시 파일
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# 3. 민감한 정보 파일 (API 키)
+
+# (만약 키를 .env 파일 등으로 분리했다면)
+*.env
+config.ini
+
+# 4. AI가 생성한 결과물 (데이터/모델)
+# (우리가 생성할 CSV 파일은 소스코드가 아니므로 무시합니다)
+*.csv
+*.pkl
+*.h5
+
+# 5. IDE 및 OS 설정 파일
+.vscode/
+.idea/
+.DS_Store
