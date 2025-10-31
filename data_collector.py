@@ -17,6 +17,7 @@ APP_SECRET = os.getenv('APP_SECRET')
 
 if not APP_KEY or not APP_SECRET:
     print("오류: .env 파일에 APP_KEY와 APP_SECRET를 설정해야 합니다.")
+    # .env 파일이 없으면 스크립트 종료
     exit()
 
 BASE_URL = 'https://openapi.koreainvestment.com:9443'
@@ -67,6 +68,7 @@ HEADERS = {
 
 # -----------------------------------------------------------------
 # (사전 준비 3) 마스터 파일 다운로드/정제 함수 (Git Logic)
+# - (V4 수정) '종목코드'와 '한글명' 리스트만 가져오는 용도로 축소
 # -----------------------------------------------------------------
 
 def download_master_file(url, zip_path, mst_name, verbose=False):
@@ -95,7 +97,7 @@ def get_stock_code_list():
         kospi_zip_path = os.path.join(BASE_DIR, "kospi_code.zip")
         kospi_mst_path = os.path.join(BASE_DIR, "kospi_code.mst")
         download_master_file("https://new.real.download.dws.co.kr/common/master/kospi_code.mst.zip", kospi_zip_path,
-                             "KOSPI")
+                             "KOSPI", verbose=True)
 
         # 코스피 마스터 파일 정제 (첫 3개 컬럼만)
         kospi_df = pd.read_fwf(kospi_mst_path, widths=[9, 12, 200], header=None, encoding="cp949", usecols=[0, 2])
@@ -113,7 +115,7 @@ def get_stock_code_list():
         kosdaq_zip_path = os.path.join(BASE_DIR, "kosdaq_code.zip")
         kosdaq_mst_path = os.path.join(BASE_DIR, "kosdaq_code.mst")
         download_master_file("https://new.real.download.dws.co.kr/common/master/kosdaq_code.mst.zip", kosdaq_zip_path,
-                             "KOSDAQ")
+                             "KOSDAQ", verbose=True)
 
         # 코스닥 마스터 파일 정제 (첫 3개 컬럼만)
         kosdaq_df = pd.read_fwf(kosdaq_mst_path, widths=[9, 12, 200], header=None, encoding="cp949", usecols=[0, 2])
@@ -127,6 +129,10 @@ def get_stock_code_list():
         print(f"[오류] KOSDAQ 마스터 파일 처리 실패: {e}")
 
     # 3. KOSPI + KOSDAQ
+    if not all_dfs:
+        print("[오류] KOSPI와 KOSDAQ 마스터 파일을 모두 불러오지 못했습니다.")
+        return pd.DataFrame(columns=['단축코드', '한글명'])
+
     df_master = pd.concat(all_dfs, ignore_index=True)
 
     # ETF/ETN/SPAC 등 제외 (예시: '005930' 형태의 6자리 숫자 코드만 필터링)
@@ -137,7 +143,7 @@ def get_stock_code_list():
 
 
 # -----------------------------------------------------------------
-# (사전 준비 4) 6가지 재료 API 호출 함수 (V5 - Final)
+# (사전 준비 4) 6가지 재료 API 호출 함수 (V5.1 - Final Fixed)
 # -----------------------------------------------------------------
 
 # [재료 1, 2, 3] PER, PBR, 시가총액
@@ -152,7 +158,7 @@ def get_price_info(stock_code):
     }
 
     try:
-        # [V5 수정] timeout을 10초로 늘려 서버 응답 지연에 대응
+        # [V5.1 수정] timeout을 10초로 설정
         res = requests.get(f"{BASE_URL}{PATH}", headers=HEADERS, params=params, timeout=10)
         res.raise_for_status()
 
@@ -166,9 +172,11 @@ def get_price_info(stock_code):
                 '시가총액': float(data.get('hts_avls', 0.0))
             }
         else:
-            print(f"  [API 오류] get_price_info({stock_code}): {json_data['msg1']}")
+            # API 자체에서 오류 응답 (예: 존재하지 않는 종목)
+            print(f"  [API 오류] get_price_info({stock_code}): {json_data.get('msg1', 'Unknown error')}")
 
     except Exception as e:
+        # 네트워크 오류 (Timeout 등)
         print(f"  [네트워크 오류] get_price_info({stock_code}): {e}")
 
     return {'per': 0.0, 'pbr': 0.0, '시가총액': 0.0}
@@ -188,7 +196,7 @@ def get_finance_ratios(stock_code):
     }
 
     try:
-        # [V5 수정] timeout을 10초로 늘려 서버 응답 지연에 대응
+        # [V5.1 수정] timeout을 10초로 설정
         res = requests.get(f"{BASE_URL}{PATH}", headers=HEADERS, params=params, timeout=10)
         res.raise_for_status()
 
@@ -204,7 +212,7 @@ def get_finance_ratios(stock_code):
                     '부채비율': float(data[0].get('lblt_rate', 0.0))
                 }
         else:
-            print(f"  [API 오류] get_finance_ratios({stock_code}): {json_data['msg1']}")
+            print(f"  [API 오류] get_finance_ratios({stock_code}): {json_data.get('msg1', 'Unknown error')}")
 
     except Exception as e:
         print(f"  [네트워크 오류] get_finance_ratios({stock_code}): {e}")
@@ -232,7 +240,7 @@ def get_dividend_rate(stock_code):
     }
 
     try:
-        # [V5 수정] timeout을 10초로 늘려 서버 응답 지연에 대응
+        # [V5.1 수정] timeout을 10초로 설정
         res = requests.get(f"{BASE_URL}{PATH}", headers=HEADERS, params=params, timeout=10)
         res.raise_for_status()
 
@@ -247,7 +255,7 @@ def get_dividend_rate(stock_code):
                     '배당수익률': float(data[0].get('divi_rate', 0.0))
                 }
         else:
-            print(f"  [API 오류] get_dividend_rate({stock_code}): {json_data['msg1']}")
+            print(f"  [API 오류] get_dividend_rate({stock_code}): {json_data.get('msg1', 'Unknown error')}")
 
     except Exception as e:
         print(f"  [네트워크 오류] get_dividend_rate({stock_code}): {e}")
@@ -256,7 +264,7 @@ def get_dividend_rate(stock_code):
 
 
 # -----------------------------------------------------------------
-# (실행) Day 1-2: 6가지 재료 수집 (V5 - 최종)
+# (실행) Day 1-2: 6가지 재료 수집 (V5.1 - 최종)
 # -----------------------------------------------------------------
 def collect_all_data():
     """스크립트의 메인 실행 함수"""
@@ -271,6 +279,10 @@ def collect_all_data():
         df_master = get_stock_code_list()
     except Exception as e:
         print(f"[오류] 마스터 파일 처리 실패: {e}")
+        return
+
+    if df_master.empty:
+        print("[오류] 조회할 종목 코드를 확보하지 못했습니다. 스크립트를 종료합니다.")
         return
 
     stock_codes = df_master['단축코드'].tolist()
@@ -293,7 +305,7 @@ def collect_all_data():
         try:
             print(f"[{count}/{len(stock_codes)}] {code} 종목 API 데이터 수집 중...", end='', flush=True)
 
-            # [V5 수정] API 호출 사이에 1초씩 휴식(sleep)을 주어 서버 제한(throttling) 방지
+            # [V5.1 수정] API 호출 사이에 1초씩 휴식(sleep)을 주어 서버 제한(throttling) 방지
 
             # [재료 1, 2, 3] PER, PBR, 시가총액 (10/sec 제한 - 비교적 여유)
             price_data = get_price_info(code)
@@ -321,15 +333,20 @@ def collect_all_data():
             print(" (완료)")
 
         except KeyboardInterrupt:
-            print("\n사용자에 의해 수동으로 중지되었습니다.")
+            print("\n사용자에 의해 수동으로 중지되었습니다. 현재까지 수집된 데이터로 저장합니다.")
             break  # 루프 중단
         except Exception as e:
             print(f"  [심각한 오류] {code} 처리 중 알 수 없는 오류: {e}")
-            continue
+            continue  # 다음 종목으로 넘어감
 
     # [ 3. 최종 데이터 합치기 및 저장 ]
     print("\nDay 1-2 (Step 3/3): API 호출 데이터와 마스터 데이터를 합칩니다...")
     df_api_data = pd.DataFrame(api_data_list)
+
+    if df_api_data.empty:
+        print("[오류] API로부터 수집된 데이터가 없습니다. CSV 파일을 생성하지 않습니다.")
+        return
+
     print("--- API 호출 (6가지 재료) 데이터 (상위 5개) ---")
     print(df_api_data.head())
 
@@ -345,9 +362,13 @@ def collect_all_data():
         'pbr',
         'ROE',
         '부채비율',
-        '배당수익률'
+        '배당수익률'  # '플랜 B'에서 '플랜 A'로 복귀!
     ]
+
+    # 혹시 모를 누락 컬럼 대비
     final_feature_df = final_df.reindex(columns=final_feature_columns)
+    # NaN (Not a Number) 값을 0.0으로 채우기 (AI 학습을 위해)
+    final_feature_df = final_feature_df.fillna(0.0)
 
     # 4. CSV 파일로 저장
     output_filename = 'stockit_ai_features_v1.csv'
