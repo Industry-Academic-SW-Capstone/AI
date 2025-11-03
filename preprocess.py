@@ -66,6 +66,11 @@ np.save('features_scaled.npy', features_scaled)
 # 숫자 벡터와 짝을 이룰 종목 정보(Pandas DataFrame) 저장
 stock_info.to_csv('stock_info.csv', index=False, encoding='utf-8')
 
+import joblib
+joblib.dump(scaler, 'scaler.pkl')
+
+print("3. scaler.pkl (AI 예측용 번역기) 파일이 생성되었습니다.")
+
 print("--- 전처리 결과 저장 완료 ---")
 print("1. features_scaled.npy (AI 학습용 벡터)")
 print("2. stock_info.csv (종목 정보) 파일이 생성되었습니다.")
