@@ -1,13 +1,14 @@
-# service.yaml 파일로 저장하세요.
+# 예시: k8s/service.yaml
 apiVersion: v1
 kind: Service
 metadata:
-  name: stock-analyze-service # 서비스의 이름
+  name: stock-analyze-svc # 👈 Ingress의 백엔드 서비스 이름
+  namespace: default
 spec:
-  type: LoadBalancer # 외부에서 접근 가능한 IP를 할당받음
+  type: ClusterIP
   selector:
-    app: stock-analyze-server # 'app: stock-analyze-server' 라벨이 붙은 Pod들을 찾음
+    app: stock-analyze-server # 👈 Deployment의 Label과 일치
   ports:
-    - protocol: TCP
-      port: 80       # 외부에서 80번 포트로 접근
-      targetPort: 8000 # Pod 내부의 8000번 포트로 연결
+    - name: http
+      port: 8000 # Service 포트
+      targetPort: 8000 # Pod 컨테이너 포트
