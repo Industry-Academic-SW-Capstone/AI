@@ -17,9 +17,17 @@ spec:
         prometheus.io/port: "8000"
     spec:
       containers:
-      - name: server
-        image: choij17/stock-ai-analyze-server:0.1.1
-        imagePullPolicy: Always
-        ports:
-        - containerPort: 8000
-        command: ["/usr/local/bin/uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+        - name: server
+          image: choij17/stock-ai-analyze-server:0.1.4
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8000
+          command:
+            [
+              "/usr/local/bin/uvicorn",
+              "app.main:app",
+              "--host",
+              "0.0.0.0",
+              "--port",
+              "8000",
+            ]
