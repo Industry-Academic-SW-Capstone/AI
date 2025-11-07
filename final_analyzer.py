@@ -1,7 +1,7 @@
 import pandas as pd
 import numpy as np
 import joblib
-import persona_definitions as pd_data  # 페르소나 정의 (철학 데이터 포함)
+from app.ai_models import persona_definitions as pd_data
 from numpy.linalg import norm  # 일치율 계산
 
 # ----------------------------------------------------
@@ -19,7 +19,7 @@ except FileNotFoundError:
 # 2. 가상의 재무 데이터베이스 로드 (API 시뮬레이션)
 # ----------------------------------------------------
 try:
-    stock_db = pd.read_csv('dummy_stock_db.csv', encoding='utf-8', dtype={'단축코드': str})
+    stock_db = pd.read_csv('app/data/dummy_stock_db.csv', encoding='utf-8', dtype={'단축코드': str})
     stock_db['단축코드'] = stock_db['단축코드'].str.strip()
     print("✅ 가상 재무 DB(dummy_stock_db.csv) 로드 성공.")
 except FileNotFoundError:

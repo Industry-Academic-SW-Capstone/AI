@@ -5,7 +5,7 @@ import joblib
 
 # --- [중요] final_analyzer.py의 핵심 함수들을 가져옵니다 ---
 # (이 파일들은 같은 폴더에 있어야 합니다)
-import persona_definitions as pd_data
+from app.ai_models import persona_definitions as pd_data
 from final_analyzer import get_style_vector, calculate_persona_match
 
 app = Flask(__name__)  # Flask 앱 초기화
@@ -15,7 +15,7 @@ try:
     model = joblib.load('kmeans_model.pkl')
     scaler = joblib.load('scaler.pkl')
     # 가상 재무 DB (API 시뮬레이션용)
-    stock_db = pd.read_csv('dummy_stock_db.csv', encoding='utf-8', dtype={'단축코드': str})
+    stock_db = pd.read_csv('app/data/dummy_stock_db.csv', encoding='utf-8', dtype={'단축코드': str})
     stock_db['단축코드'] = stock_db['단축코드'].str.strip()
     print("✅ AI 모델, 번역기, 가상 DB 로드 완료. 서버 준비됨.")
 except Exception as e:

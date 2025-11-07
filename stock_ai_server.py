@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from pydantic import BaseModel
-from typing import List, Dict, Any
+from typing import List
 import pandas as pd
 import numpy as np
 import joblib
@@ -8,7 +8,7 @@ from fastapi.responses import JSONResponse
 
 # --- [중요] final_analyzer.py의 핵심 함수들을 가져옵니다 ---
 # (이 파일들은 main.py와 같은 폴더에 있어야 합니다)
-import persona_definitions as pd_data
+from app.ai_models import persona_definitions as pd_data
 from final_analyzer import get_style_vector, calculate_persona_match
 
 # --- 1. Pydantic으로 입/출력 모델 정의 ---
@@ -54,7 +54,7 @@ try:
     model = joblib.load('kmeans_model.pkl')
     scaler = joblib.load('scaler.pkl')
     # K8s 환경에서는 상대 경로가 중요합니다.
-    stock_db = pd.read_csv('dummy_stock_db.csv', encoding='utf-8', dtype={'단축코드': str})
+    stock_db = pd.read_csv('app/data/dummy_stock_db.csv', encoding='utf-8', dtype={'단축코드': str})
     stock_db['단축코드'] = stock_db['단축코드'].str.strip()
     print("✅ AI 모델, 번역기, 가상 DB 로드 완료. FastAPI 서버 준비됨.")
 except Exception as e:

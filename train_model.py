@@ -7,7 +7,7 @@ import joblib # 모델 저장을 위해 joblib 사용
 try:
     # 01_preprocess.py가 저장한 파일들을 불러옵니다.
     features_scaled = np.load('features_scaled.npy')
-    stock_info = pd.read_csv('stock_info.csv', encoding='utf-8')
+    stock_info = pd.read_csv('app/data/stock_info.csv', encoding='utf-8')
     print(f"전처리된 데이터 로드 성공: {len(stock_info)}개 종목")
 except Exception as e:
     print(f"파일 로드 실패: {e}")
@@ -42,7 +42,7 @@ stock_info['group_tag'] = model.labels_
 
 # 3. 최종 결과 CSV 파일로 저장
 # (이것이 1단계의 최종 산출물입니다)
-final_output_file = 'stockit_ai_tags_final_v1.csv'
+final_output_file = 'app/data/stockit_ai_tags_final_v1.csv'
 stock_info.to_csv(final_output_file, index=False, encoding='utf-8')
 
 print(f"2. {final_output_file} (종목별 태그 결과) 저장 완료")

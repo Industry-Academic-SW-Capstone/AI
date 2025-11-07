@@ -371,7 +371,7 @@ def collect_all_data():
     final_feature_df = final_feature_df.fillna(0.0)
 
     # 4. CSV 파일로 저장
-    output_filename = 'stockit_ai_features_v1.csv'
+    output_filename = 'app/data/stockit_ai_features_v1.csv'
     final_feature_df.to_csv(output_filename, index=False, encoding='utf-8-sig')
 
     print(f"\nDay 1-2: 모든 재료 수집 및 정제 완료! '{output_filename}'에 저장됨.")

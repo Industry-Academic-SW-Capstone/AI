@@ -29,7 +29,7 @@ description_mapping = {
 
 
 # --- 2. 최종 태그 결과 파일 로드 ---
-input_file = 'stockit_ai_tags_final_v1.csv'
+input_file = 'app/data/stockit_ai_tags_final_v1.csv'
 try:
     df = pd.read_csv(input_file, encoding='utf-8')
     print(f"로드 성공: {input_file}")
@@ -47,7 +47,7 @@ df['style_description'] = df['group_tag'].map(description_mapping)
 print("✅ 최종 스타일 태그 및 상세 설명 변환 완료.")
 
 # --- 4. 최종 파일 저장 및 확인 ---
-final_output_file = 'stockit_final_tagged_data.csv'
+final_output_file = 'app/data/stockit_final_tagged_data.csv'
 df.to_csv(final_output_file, index=False, encoding='utf-8')
 
 print(f"--- 최종 결과 저장 완료: {final_output_file} ---")
