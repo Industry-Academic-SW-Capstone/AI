@@ -1,0 +1,14 @@
+# 예시: k8s/service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: stock-analyze-svc # 👈 Ingress의 백엔드 서비스 이름
+  namespace: default
+spec:
+  type: ClusterIP
+  selector:
+    app: stock-analyze-server # 👈 Deployment의 Label과 일치
+  ports:
+    - name: http
+      port: 8000 # Service 포트
+      targetPort: 8000 # Pod 컨테이너 포트
