@@ -3,18 +3,25 @@ kind: Ingress
 metadata:
   name: stock-analyze-ingress
   annotations:
-    # Force resync to trigger Load Balancer update
-    force-resync: "20251107-1"
     kubernetes.io/ingress.class: "gce"
-    networking.gke.io/managed-certificates: "stock-analyze-gke-cert"
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
 spec:
   tls:
     - hosts:
         - api.stockit.live
+      secretName: stock-analyze-tls-cert
   rules:
     - host: api.stockit.live
       http:
         paths:
+          # /.well-known/acme-challenge 경로는 제외하여 challenge Ingress가 처리하도록 함
+          - path: /health
+            pathType: Exact
+            backend:
+              service:
+                name: stock-analyze-svc
+                port:
+                  number: 8000
           - path: /
             pathType: Prefix
             backend:
