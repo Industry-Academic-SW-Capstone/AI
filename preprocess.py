@@ -5,7 +5,7 @@ import numpy as np
 # --- 1. 데이터 로드 ---
 try:
     # v1 CSV 파일 로드 (utf-8)
-    df_raw = pd.read_csv('stockit_ai_features_v1.csv', encoding='utf-8')
+    df_raw = pd.read_csv('app/data/stockit_ai_features_v1.csv', encoding='utf-8')
     print(f"로드 성공: 원본 데이터 {len(df_raw)}개")
 except Exception as e:
     print(f"파일 로드 실패: {e}")

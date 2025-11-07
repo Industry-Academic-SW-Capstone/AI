@@ -1,6 +1,6 @@
 import pandas as pd
 import numpy as np
-import persona_definitions as pd_data
+from app.ai_models import persona_definitions as pd_data
 from numpy.linalg import norm  # 유클리디안 거리 계산을 위해 사용
 
 # ----------------------------------------------------
@@ -25,7 +25,7 @@ def analyze_user_style(user_portfolio_df):
 
     # 1-2. AI 태그 데이터베이스 로드 시, '단축코드'를 문자열로 지정하여 로드합니다.
     try:
-        df_tags = pd.read_csv('stockit_final_tagged_data.csv', encoding='utf-8', dtype={'단축코드': str})
+        df_tags = pd.read_csv('app/data/stockit_final_tagged_data.csv', encoding='utf-8', dtype={'단축코드': str})
     except FileNotFoundError:
         print("오류: stockit_final_tagged_data.csv 파일을 찾을 수 없습니다. 04_apply_final_tags.py를 먼저 실행하세요.")
         return None, None

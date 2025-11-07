@@ -3,12 +3,12 @@ import pandas as pd
 # --- 1. 파일 로드 ---
 try:
     # 1-1. 최종 태그 결과 파일 로드 (단축코드, 한글명, group_tag)
-    df_tags = pd.read_csv('stockit_ai_tags_final_v1.csv', encoding='utf-8')
+    df_tags = pd.read_csv('app/data/stockit_ai_tags_final_v1.csv', encoding='utf-8')
     print(f"1. AI 태그 결과 로드 성공: {len(df_tags)}개 종목")
 
     # 1-2. 원본 피처 데이터 로드 (단축코드, 한글명, 6가지 지표 포함)
     # 이 파일은 01_preprocess.py의 입력 파일이었습니다.
-    df_features_raw = pd.read_csv('stockit_ai_features_v1.csv', encoding='utf-8')
+    df_features_raw = pd.read_csv('app/data/stockit_ai_features_v1.csv', encoding='utf-8')
     print(f"2. 원본 피처 데이터 로드 성공: {len(df_features_raw)}개 종목")
 
 except Exception as e:
