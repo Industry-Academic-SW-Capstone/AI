@@ -12,5 +12,6 @@ class StockAnalyzeRequest(BaseModel):
 
 class StockAnalyzeResponse(BaseModel):
     단축코드: str
+    한글명: str  # [추가됨]
     final_style_tag: str
-    style_description: str
+    style_description: str # '주린이 해설'이 여기에 담깁니다.
