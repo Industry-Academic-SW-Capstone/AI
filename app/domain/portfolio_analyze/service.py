@@ -2,13 +2,13 @@ import pandas as pd
 import numpy as np
 import joblib
 from numpy.linalg import norm
-from app.ai_models import persona_definitions as pd_data  # '근거', '철학'을 모두 임포트
+from ai_models import persona_definitions as pd_data  # '근거', '철학'을 모두 임포트
 from .dto import PortfolioAnalyzeRequest
 
 # 모델, 스케일러, DB 로드
-model = joblib.load("app/ai_models/kmeans_model.pkl")
-scaler = joblib.load("app/ai_models/scaler.pkl")
-stock_db = pd.read_csv("app/data/dummy_stock_db.csv", dtype={"단축코드": str})
+model = joblib.load("ai_models/kmeans_model.pkl")
+scaler = joblib.load("ai_models/scaler.pkl")
+stock_db = pd.read_csv("data/dummy_stock_db.csv", dtype={"단축코드": str})
 
 tag_mapping = {
     0: '[안정형 일반주]', 1: '[고효율 우량주]', 2: '[초고배당 가치주]',
@@ -146,6 +146,6 @@ def analyze_portfolio(request: PortfolioAnalyzeRequest):
     return {
         "stock_details": stock_details,
         "summary": summary,
-        "style_breakFdown": style_breakdown,
+        "style_breakdown": style_breakdown,
         "persona_match": persona_match
     }

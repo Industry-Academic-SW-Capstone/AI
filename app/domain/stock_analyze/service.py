@@ -1,12 +1,15 @@
 import pandas as pd
 import numpy as np
 import joblib
-from .dto import StockAnalyzeRequest  # DTO 임포트
+from numpy.linalg import norm
+from .dto import StockAnalyzeRequest, StockAnalyzeResponse
 
-# 모델, 스케일러, DB 로드 (전역)
-model = joblib.load("app/ai_models/kmeans_model.pkl")
-scaler = joblib.load("app/ai_models/scaler.pkl")
-stock_db = pd.read_csv("app/data/dummy_stock_db.csv", dtype={"단축코드": str}).set_index("단축코드")
+
+# 모델, 스케일러, DB 로드
+model = joblib.load("ai_models/kmeans_model.pkl")
+scaler = joblib.load("ai_models/scaler.pkl")
+stock_db = pd.read_csv("data/dummy_stock_db.csv", dtype={"단축코드": str}).set_index("단축코드")
+
 
 tag_mapping = {
     0: '[안정형 일반주]', 1: '[고효율 우량주]', 2: '[초고배당 가치주]',
