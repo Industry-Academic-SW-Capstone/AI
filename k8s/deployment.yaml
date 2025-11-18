@@ -18,7 +18,7 @@ spec:
     spec:
       containers:
         - name: server
-          image: choij17/stock-ai-analyze-server:0.1.9
+          image: choij17/stock-ai-analyze-server:0.1.10
           imagePullPolicy: Always
           ports:
             - containerPort: 8000
