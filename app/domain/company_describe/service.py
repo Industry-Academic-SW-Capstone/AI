@@ -87,3 +87,16 @@ def get_company_description(company_name: str, use_cache: bool = True) -> tuple[
     except Exception as e:
         raise Exception(f"기업 설명 생성 중 오류: {e}")
 
+
+def get_company_description_no_cache(company_name: str) -> str:
+    """
+    캐시를 사용하지 않고 기업 설명을 생성합니다. (성능 비교용)
+    
+    Args:
+        company_name: 기업 한글명
+    
+    Returns:
+        설명 텍스트
+    """
+    description, _ = get_company_description(company_name, use_cache=False)
+    return description

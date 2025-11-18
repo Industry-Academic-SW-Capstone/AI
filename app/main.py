@@ -8,6 +8,7 @@ from fastapi import FastAPI
 from app.domain.stock_analyze.controller import router as stock_router
 from app.domain.portfolio_analyze.controller import router as portfolio_router
 from app.domain.company_describe.controller import router as company_router
+from app.domain.performance_test.controller import router as performance_router
 
 from prometheus_fastapi_instrumentator import Instrumentator
 
@@ -28,6 +29,9 @@ async def startup():
 app.include_router(stock_router, prefix="/stock", tags=["Stock Analyze"])
 app.include_router(portfolio_router, prefix="/portfolio", tags=["Portfolio Analyze"])
 app.include_router(company_router, prefix="/company", tags=["Company Describe"])
+app.include_router(
+    performance_router, prefix="/test/performance", tags=["Performance Test"]
+)
 
 
 @app.get("/")
