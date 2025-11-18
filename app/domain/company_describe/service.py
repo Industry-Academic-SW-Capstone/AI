@@ -70,7 +70,7 @@ def get_company_description(
         prompt = PROMPT_TEMPLATE.format(company_name=company_name)
 
         response = gemini_client.models.generate_content(
-            model="gemini-1.5-flash",  # 무료 티어에서 사용 가능한 빠른 모델
+            model="gemini-2.5-flash",  # 무료 티어에서 사용 가능한 빠른 모델
             contents=prompt,
         )
 
