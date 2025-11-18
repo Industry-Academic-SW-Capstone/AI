@@ -1,0 +1,43 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: stock-analyze-deployment
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: stock-analyze-server
+  template:
+    metadata:
+      labels:
+        app: stock-analyze-server
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/path: "/metrics"
+        prometheus.io/port: "8000"
+    spec:
+      containers:
+        - name: server
+          image: choij17/stock-ai-analyze-server:0.1.5
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8000
+          env:
+            - name: GEMINI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: gemini-api-key
+                  key: GEMINI_API_KEY
+            - name: REDIS_HOST
+              value: "redis-service"
+            - name: REDIS_PORT
+              value: "6379"
+          command:
+            [
+              "/usr/local/bin/uvicorn",
+              "app.main:app",
+              "--host",
+              "0.0.0.0",
+              "--port",
+              "8000",
+            ]
