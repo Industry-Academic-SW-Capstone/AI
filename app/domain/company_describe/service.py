@@ -89,9 +89,15 @@ def get_company_description(
         except ClientError as e:
             # 429(한도초과) 또는 503(서버과부하) 등은 재시도
             error_str = str(e)
-            if "429" in error_str or "503" in error_str or "RESOURCE_EXHAUSTED" in error_str:
+            if (
+                "429" in error_str
+                or "503" in error_str
+                or "RESOURCE_EXHAUSTED" in error_str
+            ):
                 if attempt < max_retries - 1:
-                    print(f"⚠️ API 과부하/제한 ({attempt+1}/{max_retries}). 2초 후 재시도...")
+                    print(
+                        f"⚠️ API 과부하/제한 ({attempt+1}/{max_retries}). 2초 후 재시도..."
+                    )
                     time.sleep(2)
                     continue
 

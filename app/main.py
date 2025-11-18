@@ -1,4 +1,5 @@
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 # ⛔️ 잘못된 경로 (컨테이너 안에서는 'domain'이 루트가 아님)
 # from domain.stock_analyze.controller import router as stock_router
@@ -16,6 +17,15 @@ app = FastAPI(
     title="Stock AI Analyze Server",
     version="0.1.5",
     description="AI 기반 주식 분석 및 기업 설명 서비스",
+)
+
+# CORS 미들웨어 추가
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # 프로덕션에서는 특정 origin만 허용
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 Instrumentator().instrument(app).expose(app)
