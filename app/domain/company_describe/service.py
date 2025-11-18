@@ -9,7 +9,12 @@ def get_redis_client():
     """Redis 클라이언트 반환 (싱글톤 패턴)"""
     redis_host = os.getenv("REDIS_HOST", "localhost")
     redis_port = int(os.getenv("REDIS_PORT", "6379"))
-    return redis.Redis(host=redis_host, port=redis_port, decode_responses=True, socket_connect_timeout=2)
+    return redis.Redis(
+        host=redis_host,
+        port=redis_port,
+        decode_responses=True,
+        socket_connect_timeout=2,
+    )
 
 
 # Gemini 클라이언트 초기화
@@ -33,20 +38,22 @@ PROMPT_TEMPLATE = """당신은 한국 주식시장의 상장 기업을 전문적
 """
 
 
-def get_company_description(company_name: str, use_cache: bool = True) -> tuple[str, bool]:
+def get_company_description(
+    company_name: str, use_cache: bool = True
+) -> tuple[str, bool]:
     """
     기업 설명을 생성합니다.
-    
+
     Args:
         company_name: 기업 한글명
         use_cache: 캐시 사용 여부 (기본값: True)
-    
+
     Returns:
         (설명 텍스트, 캐시 히트 여부)
     """
     cache_key = f"company_desc:{company_name}"
     cached = False
-    
+
     # 1. 캐시 확인
     if use_cache:
         try:
@@ -56,22 +63,22 @@ def get_company_description(company_name: str, use_cache: bool = True) -> tuple[
                 return cached_desc, True
         except Exception as e:
             print(f"Redis 캐시 조회 실패 (무시하고 계속): {e}")
-    
+
     # 2. 캐시 미스 → LLM API 호출
     try:
         gemini_client = get_gemini_client()
         prompt = PROMPT_TEMPLATE.format(company_name=company_name)
-        
+
         response = gemini_client.models.generate_content(
-            model='gemini-2.0-flash-exp',  # 무료 티어에서 사용 가능한 빠른 모델
-            contents=prompt
+            model="gemini-1.5-flash",  # 무료 티어에서 사용 가능한 빠른 모델
+            contents=prompt,
         )
-        
+
         description = response.text.strip()
-        
+
         if not description:
             raise Exception("LLM이 유효한 답변을 생성하지 못했습니다.")
-        
+
         # 3. 캐시 저장 (TTL: 3시간 = 10800초)
         if use_cache:
             try:
@@ -79,9 +86,9 @@ def get_company_description(company_name: str, use_cache: bool = True) -> tuple[
                 cache_client.setex(cache_key, 10800, description)
             except Exception as e:
                 print(f"Redis 캐시 저장 실패 (무시하고 계속): {e}")
-        
+
         return description, False
-        
+
     except APIError as e:
         raise Exception(f"Gemini API 호출 오류: {e}")
     except Exception as e:
@@ -91,10 +98,10 @@ def get_company_description(company_name: str, use_cache: bool = True) -> tuple[
 def get_company_description_no_cache(company_name: str) -> str:
     """
     캐시를 사용하지 않고 기업 설명을 생성합니다. (성능 비교용)
-    
+
     Args:
         company_name: 기업 한글명
-    
+
     Returns:
         설명 텍스트
     """
