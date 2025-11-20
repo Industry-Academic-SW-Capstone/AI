@@ -1,20 +1,32 @@
 import pandas as pd
 import numpy as np
 import joblib
+from pathlib import Path
 from numpy.linalg import norm
 from .dto import StockAnalyzeRequest, StockAnalyzeResponse
 
 
-# 모델, 스케일러, DB 로드
-model = joblib.load("ai_models/kmeans_model.pkl")
-scaler = joblib.load("ai_models/scaler.pkl")
-stock_db = pd.read_csv("data/dummy_stock_db.csv", dtype={"단축코드": str}).set_index("단축코드")
+# 모델, 스케일러, DB 로드 (파일 절대경로)
+BASE_DIR = Path(__file__).resolve().parents[2]  # /app/app
+MODEL_DIR = BASE_DIR / "ai_models"
+DATA_DIR = BASE_DIR / "data"
+
+model = joblib.load(str(MODEL_DIR / "kmeans_model.pkl"))
+scaler = joblib.load(str(MODEL_DIR / "scaler.pkl"))
+stock_db = pd.read_csv(
+    str(DATA_DIR / "dummy_stock_db.csv"), dtype={"단축코드": str}
+).set_index("단축코드")
 
 
 tag_mapping = {
-    0: '[안정형 일반주]', 1: '[고효율 우량주]', 2: '[초고배당 가치주]',
-    3: '[고위험 저평가주]', 4: '[고성장 기대주]', 5: '[초대형 우량주]',
-    6: '[초저평가 가치주]', 7: '[고가치 성장주]'
+    0: "[안정형 일반주]",
+    1: "[고효율 우량주]",
+    2: "[초고배당 가치주]",
+    3: "[고위험 저평가주]",
+    4: "[고성장 기대주]",
+    5: "[초대형 우량주]",
+    6: "[초저평가 가치주]",
+    7: "[고가치 성장주]",
 }
 
 # [수정됨] '주린이 해설' 버전의 상세한 description_mapping
@@ -26,13 +38,13 @@ description_mapping = {
     4: "미래를 꿈꾸는 성장주: PER이 엄청나게 높아요. (회사가 버는 돈에 비해 주가가 매우 비싸요). 이는 사람들이 이 회사가 '앞으로 엄청난 대박을 칠 것'이라고 기대하기 때문이에요.",
     5: "대한민국 대표 우량주: 시가총액이 가장 커요. (회사의 덩치가 가장 커요). 워낙 크기 때문에 크게 오르기는 어렵지만, 시장을 대표하는 안정적인 그룹이에요.",
     6: "워렌 버핏이 좋아하는 주식: PER과 PBR이 가장 낮고 (가장 저렴함) 부채비율도 가장 낮아 (가장 안전함) '싸고 안전한 종목'을 찾는 정석적인 가치투자자들이 선호하는 그룹이에요.",
-    7: "프리미엄 붙은 최고급 주식: PBR이 높아 (이미 비싸지만) ROE도 높아 (실제로 돈도 잘 벌고 효율도 좋음). 시장에서 '비싼 값을 지불할 가치'가 있다고 인정받는 성장 기업 그룹이에요."
+    7: "프리미엄 붙은 최고급 주식: PBR이 높아 (이미 비싸지만) ROE도 높아 (실제로 돈도 잘 벌고 효율도 좋음). 시장에서 '비싼 값을 지불할 가치'가 있다고 인정받는 성장 기업 그룹이에요.",
 }
 
 
 def analyze_stock(request: StockAnalyzeRequest):
     df = pd.DataFrame([request.dict()])
-    features = ['시가총액', 'per', 'pbr', 'ROE', '부채비율', '배당수익률']
+    features = ["시가총액", "per", "pbr", "ROE", "부채비율", "배당수익률"]
 
     try:
         scaled = scaler.transform(df[features])
@@ -43,7 +55,7 @@ def analyze_stock(request: StockAnalyzeRequest):
 
         # stock_db에서 한글명 조회
     try:
-        stock_name = stock_db.loc[request.단축코드]['한글명']
+        stock_name = stock_db.loc[request.단축코드]["한글명"]
     except KeyError:
         stock_name = "알 수 없는 종목"  # DB에 없는 경우
 
@@ -51,5 +63,5 @@ def analyze_stock(request: StockAnalyzeRequest):
         "단축코드": request.단축코드,
         "한글명": stock_name,
         "final_style_tag": tag_mapping[pred_group],
-        "style_description": description_mapping[pred_group]
+        "style_description": description_mapping[pred_group],
     }
