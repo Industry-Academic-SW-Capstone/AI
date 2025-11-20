@@ -62,8 +62,8 @@ def get_company_description(
     gemini_client = get_gemini_client()
     prompt = PROMPT_TEMPLATE.format(company_name=company_name)
 
-    # ✅ 수정됨: 가장 확실한 모델명 사용
-    model_name = "gemini-1.5-flash"
+    # ✅ 유료 모드: Gemini 2.5 Flash 사용 (최신 안정 버전)
+    model_name = "models/gemini-2.5-flash"
     max_retries = 3
     for attempt in range(max_retries):
         try:
