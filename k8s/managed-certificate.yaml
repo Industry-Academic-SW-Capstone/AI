@@ -1,0 +1,9 @@
+apiVersion: networking.gke.io/v1
+kind: ManagedCertificate
+metadata:
+  name: stock-analyze-gke-cert
+  namespace: default
+spec:
+  domains:
+    - api.stockit.live
+
