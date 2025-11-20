@@ -15,7 +15,7 @@ from prometheus_fastapi_instrumentator import Instrumentator
 
 app = FastAPI(
     title="Stock AI Analyze Server",
-    version="0.1.5",
+    version="0.1.16",
     description="AI 기반 주식 분석 및 기업 설명 서비스",
 )
 

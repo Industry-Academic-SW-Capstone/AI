@@ -17,8 +17,9 @@ DATA_DIR = BASE_DIR / "data"
 
 model = joblib.load(str(MODEL_DIR / "kmeans_model.pkl"))
 scaler = joblib.load(str(MODEL_DIR / "scaler.pkl"))
+# stockit_ai_features_v1.csv 사용 (3621개 종목)
 stock_db = pd.read_csv(
-    str(DATA_DIR / "dummy_stock_db.csv"), dtype={"단축코드": str}
+    str(DATA_DIR / "stockit_ai_features_v1.csv"), dtype={"단축코드": str}
 ).set_index("단축코드")
 
 
@@ -62,7 +63,7 @@ def get_redis_client():
 def generate_cache_key(request: StockAnalyzeRequest) -> str:
     """요청 데이터로 캐시 키 생성 (재무 지표 변경 시 다른 캐시)"""
     # 단축코드와 재무 지표들을 조합하여 고유한 해시 생성
-    data_str = f"{request.단축코드}:{request.시가총액}:{request.per}:{request.pbr}:{request.ROE}:{request.부채비율}:{request.배당수익률}"
+    data_str = f"{request.stock_code}:{request.market_cap}:{request.per}:{request.pbr}:{request.roe}:{request.debt_ratio}:{request.dividend_yield}"
     hash_key = hashlib.md5(data_str.encode()).hexdigest()
     return f"stock_analyze:{hash_key}"
 
@@ -88,7 +89,20 @@ def analyze_stock(request: StockAnalyzeRequest, use_cache: bool = True):
             print(f"Redis 캐시 조회 실패 (무시하고 계속): {e}")
 
     # 2. 캐시 미스 → AI 모델 추론
-    df = pd.DataFrame([request.dict()])
+    # Spring 서버가 보내는 영문 필드명을 모델이 기대하는 한글 필드명으로 변환
+    df = pd.DataFrame(
+        [
+            {
+                "단축코드": request.stock_code,
+                "시가총액": request.market_cap,
+                "per": request.per,
+                "pbr": request.pbr,
+                "ROE": request.roe,
+                "부채비율": request.debt_ratio,
+                "배당수익률": request.dividend_yield,
+            }
+        ]
+    )
     features = ["시가총액", "per", "pbr", "ROE", "부채비율", "배당수익률"]
 
     try:
@@ -98,16 +112,21 @@ def analyze_stock(request: StockAnalyzeRequest, use_cache: bool = True):
         # TODO: 실제 서비스에서는 500 에러를 반환하도록 예외 처리 필요
         return {"error": f"AI 분석 중 오류 발생: {str(e)}"}
 
-    # stock_db에서 한글명 조회
+    # stock_db에서 한글명 조회 (첫 단어만 추출하여 한글명만 가져옴)
     try:
-        stock_name = stock_db.loc[request.단축코드]["한글명"]
+        stock_name_full = stock_db.loc[request.stock_code]["한글명"]
+        # 한글명에 불필요한 텍스트가 붙어있을 수 있으므로 첫 단어만 추출
+        stock_name = (
+            str(stock_name_full).split()[0] if stock_name_full else "알 수 없는 종목"
+        )
     except KeyError:
         stock_name = "알 수 없는 종목"  # DB에 없는 경우
 
+    # Spring 서버가 기대하는 응답 형식으로 반환 (영문 필드명)
     result = {
-        "단축코드": request.단축코드,
-        "한글명": stock_name,
-        "final_style_tag": tag_mapping[pred_group],
+        "stock_code": request.stock_code,
+        "stock_name": stock_name,
+        "style_tag": tag_mapping[pred_group],
         "style_description": description_mapping[pred_group],
     }
 

@@ -13,7 +13,10 @@ DATA_DIR = BASE_DIR / "data"
 
 model = joblib.load(str(MODEL_DIR / "kmeans_model.pkl"))
 scaler = joblib.load(str(MODEL_DIR / "scaler.pkl"))
-stock_db = pd.read_csv(str(DATA_DIR / "dummy_stock_db.csv"), dtype={"단축코드": str})
+# stockit_ai_features_v1.csv 사용 (3621개 종목)
+stock_db = pd.read_csv(
+    str(DATA_DIR / "stockit_ai_features_v1.csv"), dtype={"단축코드": str}
+)
 
 tag_mapping = {
     0: "[안정형 일반주]",
@@ -86,7 +89,25 @@ def calculate_persona_match(user_vector):
 
 
 def analyze_portfolio(request: PortfolioAnalyzeRequest):
-    df = pd.DataFrame([s.dict() for s in request.stocks])
+    # Spring 서버가 보내는 영문 필드명을 모델이 기대하는 한글 필드명으로 변환
+    stocks_data = []
+    for stock in request.stocks:
+        stocks_data.append(
+            {
+                "단축코드": stock.stock_code,
+                "한글명": (
+                    stock.stock_name if stock.stock_name else None
+                ),  # Spring 서버에서 전달한 종목명
+                "시가총액": stock.market_cap,
+                "per": stock.per,
+                "pbr": stock.pbr,
+                "ROE": stock.roe,
+                "부채비율": stock.debt_ratio,
+                "배당수익률": stock.dividend_yield,
+                "투자금액": stock.investment_amount,
+            }
+        )
+    df = pd.DataFrame(stocks_data)
 
     style_vector, merged_df = get_portfolio_style_vector(df)
 
@@ -103,9 +124,23 @@ def analyze_portfolio(request: PortfolioAnalyzeRequest):
     merged_df["final_style_tag"] = merged_df["group_tag"].map(tag_mapping)
     merged_df["style_description"] = merged_df["group_tag"].map(description_mapping)
 
+    # Spring 서버에서 전달한 종목명이 있으면 우선 사용, 없으면 DB에서 찾기
     df_with_names = pd.merge(
-        merged_df, stock_db[["단축코드", "한글명"]], on="단축코드", how="left"
+        merged_df,
+        stock_db[["단축코드", "한글명"]],
+        on="단축코드",
+        how="left",
+        suffixes=("", "_db"),  # Java 전달값과 DB값 구분
     )
+
+    # DB에서 찾은 한글명 정리 (공백과 불필요한 텍스트 제거)
+    if "한글명_db" in df_with_names.columns:
+        df_with_names["한글명_db"] = (
+            df_with_names["한글명_db"].astype(str).str.split().str[0]
+        )  # 첫 단어만 추출 (한글명만)
+
+    # 우선순위: Spring 서버에서 전달한 한글명 > DB에서 찾은 한글명 > 기본값
+    df_with_names["한글명"] = df_with_names["한글명"].fillna(df_with_names["한글명_db"])
     df_with_names["한글명"] = df_with_names["한글명"].fillna("알 수 없는 종목")
 
     stock_details = []
@@ -113,7 +148,7 @@ def analyze_portfolio(request: PortfolioAnalyzeRequest):
         if pd.notna(row["final_style_tag"]):
             stock_details.append(
                 {
-                    "stock_code": row["단축코드"],
+                    "stock_code": row["단축코드"],  # Spring 서버 형식으로 반환
                     "stock_name": row["한글명"],
                     "style_tag": row["final_style_tag"],
                     "description": row["style_description"],
@@ -121,11 +156,19 @@ def analyze_portfolio(request: PortfolioAnalyzeRequest):
             )
 
     # --- [2] 포트폴리오 종합 성향 (가중 평균) ---
-    feature_columns = ["시가총액", "per", "pbr", "ROE", "부채비율", "배당수익률"]
+    # Spring 서버 형식으로 영문 필드명 사용
+    feature_mapping = {
+        "시가총액": "market_cap",
+        "per": "per",
+        "pbr": "pbr",
+        "ROE": "roe",
+        "부채비율": "debt_ratio",
+        "배당수익률": "dividend_yield",
+    }
     summary = {}
-    for col in feature_columns:
-        weighted_avg = (merged_df[col] * merged_df["비중"]).sum()
-        summary[col] = round(weighted_avg, 2)  # 소수점 2자리 반올림
+    for col_ko, col_en in feature_mapping.items():
+        weighted_avg = (merged_df[col_ko] * merged_df["비중"]).sum()
+        summary[col_en] = round(weighted_avg, 2)  # 소수점 2자리 반올림
 
     # --- [3] 최종 스타일 태그 비중 ---
     tag_names = list(tag_mapping.values())
