@@ -22,7 +22,7 @@ class StockAnalyzeResponse(BaseModel):
 
     stock_code: str = Field(..., alias="단축코드")
     stock_name: str = Field(..., alias="한글명")
-    style_tag: str = Field(..., alias="final_style_tag")
+    final_style_tag: str = Field(..., alias="style_tag")  # 스프링 DTO 필드명에 맞춤
     style_description: str
 
     class Config:
@@ -31,7 +31,7 @@ class StockAnalyzeResponse(BaseModel):
             "example": {
                 "stock_code": "005930",
                 "stock_name": "삼성전자",
-                "style_tag": "[초대형 우량주]",
+                "final_style_tag": "[초대형 우량주]",
                 "style_description": "대한민국 대표 우량주...",
             }
         }
