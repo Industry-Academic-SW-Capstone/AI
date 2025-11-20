@@ -122,11 +122,11 @@ def analyze_stock(request: StockAnalyzeRequest, use_cache: bool = True):
     except KeyError:
         stock_name = "알 수 없는 종목"  # DB에 없는 경우
 
-    # Spring 서버가 기대하는 응답 형식으로 반환 (영문 필드명)
+    # Spring 서버가 기대하는 응답 형식으로 반환 (영문 필드명, alias 사용)
     result = {
         "stock_code": request.stock_code,
         "stock_name": stock_name,
-        "style_tag": tag_mapping[pred_group],
+        "final_style_tag": tag_mapping[pred_group],  # 스프링 DTO가 기대하는 필드명
         "style_description": description_mapping[pred_group],
     }
 
