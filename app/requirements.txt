@@ -10,3 +10,8 @@ numpy
 pandas
 scikit-learn
 joblib
+
+# --- Gemini LLM 및 캐싱 ---
+google-genai
+redis
+cachetools

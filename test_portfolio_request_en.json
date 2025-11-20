@@ -1,0 +1,36 @@
+{
+  "stocks": [
+    {
+      "stock_code": "005930",
+      "market_cap": 6363611.0,
+      "per": 21.72,
+      "pbr": 1.86,
+      "roe": 6.64,
+      "debt_ratio": 26.36,
+      "dividend_yield": 370.0,
+      "investment_amount": 1000000
+    },
+    {
+      "stock_code": "000660",
+      "market_cap": 4069533.0,
+      "per": 20.57,
+      "pbr": 5.35,
+      "roe": 37.52,
+      "debt_ratio": 48.13,
+      "dividend_yield": 7.5,
+      "investment_amount": 800000
+    },
+    {
+      "stock_code": "035720",
+      "market_cap": 287949.0,
+      "per": 525.0,
+      "pbr": 2.85,
+      "roe": 6.43,
+      "debt_ratio": 82.07,
+      "dividend_yield": 68.0,
+      "investment_amount": 500000
+    }
+  ]
+}
+
+
