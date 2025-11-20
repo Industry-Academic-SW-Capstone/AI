@@ -10,8 +10,8 @@ from numpy.linalg import norm
 from .dto import StockAnalyzeRequest, StockAnalyzeResponse
 
 
-# 모델, 스케일러, DB 로드 (파일 절대경로)
-BASE_DIR = Path(__file__).resolve().parents[2]  # /app/app
+# 모델, 스케일러, DB 로드 (절대 경로 사용)
+BASE_DIR = Path(__file__).resolve().parents[2]  # /app
 MODEL_DIR = BASE_DIR / "ai_models"
 DATA_DIR = BASE_DIR / "data"
 
