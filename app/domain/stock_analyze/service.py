@@ -5,6 +5,7 @@ import json
 import hashlib
 import os
 import redis
+import re
 from pathlib import Path
 from numpy.linalg import norm
 from .dto import StockAnalyzeRequest, StockAnalyzeResponse
@@ -68,15 +69,76 @@ def generate_cache_key(request: StockAnalyzeRequest) -> str:
     return f"stock_analyze:{hash_key}"
 
 
+def is_valid_stock_for_analysis(stock_name: str) -> bool:
+    """
+    스타일 태그 생성이 가능한 종목인지 검증
+
+    Returns:
+        True: 분석 가능 (정상 종목)
+        False: 분석 불가 (SPAC, 우선주, 인버스 등)
+    """
+    if not stock_name or stock_name == "알 수 없는 종목":
+        return False
+
+    # 1. 우선주 필터링
+    if "(우)" in stock_name:
+        return False
+    # "숫자+우" 또는 "숫자+우+영문" 패턴 (예: 1우, 2우B, 3우C)
+    if re.search(r"\d+우[A-Z]?$", stock_name):
+        return False
+    # 종목명 끝이 "우"로 끝나는 경우 (예: SK텔레콤우, LG화학우)
+    if stock_name.endswith("우"):
+        return False
+
+    # 2. SPAC 필터링
+    if "스팩" in stock_name or "SPAC" in stock_name.upper():
+        return False
+
+    # 3. 인버스/레버리지 필터링
+    if "인버스" in stock_name or "레버리지" in stock_name:
+        return False
+
+    # 4. 홀딩스/지주 필터링 (선택적 - 필요시 주석 해제)
+    # if "홀딩스" in stock_name or "홀딩" in stock_name or "지주" in stock_name:
+    #     return False
+
+    return True
+
+
+def get_unanalyzable_reason(stock_name: str, in_db: bool = True) -> str:
+    """분석 불가 사유 생성"""
+    if not in_db:
+        return "이 종목은 AI 학습 데이터에 포함되지 않아 투자 스타일 분석이 불가능합니다. 포트폴리오 분석을 위해 다른 종목을 선택해주세요."
+
+    if "(우)" in stock_name or re.search(r"\d+우[A-Z]?$", stock_name):
+        return "이 종목은 우선주로 분류되어 투자 스타일 분석이 불가능합니다. 포트폴리오 분석을 위해 보통주를 선택해주세요."
+    elif "스팩" in stock_name or "SPAC" in stock_name.upper():
+        return "이 종목은 SPAC(기업인수목적회사)으로 투자 스타일 분석이 불가능합니다."
+    elif "인버스" in stock_name or "레버리지" in stock_name:
+        return "이 종목은 인버스/레버리지 상품으로 투자 스타일 분석이 불가능합니다."
+    elif "홀딩스" in stock_name or "홀딩" in stock_name or "지주" in stock_name:
+        return "이 종목은 지주회사로 투자 스타일 분석이 불가능합니다."
+    else:
+        return (
+            "이 종목은 AI 학습 데이터에 포함되지 않아 투자 스타일 분석이 불가능합니다."
+        )
+
+
 def analyze_stock(request: StockAnalyzeRequest, use_cache: bool = True):
     """
-    주식 분석 with Redis 캐싱
+    주식 분석 with Redis 캐싱 + SPAC/우선주 필터링
+
+    핵심: 스타일 태그를 생성할 수 있는지 판단하여 analyzable 반환
 
     Args:
         request: 주식 분석 요청 데이터
         use_cache: 캐시 사용 여부 (기본값: True)
+
+    Returns:
+        - analyzable: True → 정상 분석 가능 (포트폴리오 분석 가능)
+        - analyzable: False → 분석 불가 (SPAC, 우선주 등) → 매수 차단
     """
-    # 1. 캐시 확인
+    # ===== 1. 캐시 확인 =====
     if use_cache:
         try:
             cache_client = get_redis_client()
@@ -88,8 +150,66 @@ def analyze_stock(request: StockAnalyzeRequest, use_cache: bool = True):
         except Exception as e:
             print(f"Redis 캐시 조회 실패 (무시하고 계속): {e}")
 
-    # 2. 캐시 미스 → AI 모델 추론
-    # Spring 서버가 보내는 영문 필드명을 모델이 기대하는 한글 필드명으로 변환
+    # ===== 2. AI 학습 DB에 있는지 확인 (핵심!) =====
+    if request.stock_code not in stock_db.index:
+        # AI 학습 데이터에 없음 → 스타일 태그 생성 불가
+        result = {
+            "stock_code": request.stock_code,
+            "stock_name": "알 수 없는 종목",
+            "final_style_tag": None,
+            "style_description": None,
+            "analyzable": False,
+            "reason": get_unanalyzable_reason("", in_db=False),
+        }
+
+        # 분석 불가 결과도 캐싱 (TTL: 1시간)
+        if use_cache:
+            try:
+                cache_client = get_redis_client()
+                cache_key = generate_cache_key(request)
+                cache_client.setex(
+                    cache_key, 3600, json.dumps(result, ensure_ascii=False)
+                )
+            except Exception as e:
+                print(f"Redis 캐시 저장 실패 (무시하고 계속): {e}")
+
+        return result
+
+    # ===== 3. 종목명 조회 =====
+    try:
+        stock_name_full = stock_db.loc[request.stock_code]["한글명"]
+        # 한글명에 불필요한 텍스트가 붙어있을 수 있으므로 첫 단어만 추출
+        stock_name = (
+            str(stock_name_full).split()[0] if stock_name_full else "알 수 없는 종목"
+        )
+    except KeyError:
+        stock_name = "알 수 없는 종목"
+
+    # ===== 4. 종목명 필터링 (SPAC, 우선주 등) =====
+    if not is_valid_stock_for_analysis(stock_name):
+        result = {
+            "stock_code": request.stock_code,
+            "stock_name": stock_name,
+            "final_style_tag": None,
+            "style_description": None,
+            "analyzable": False,
+            "reason": get_unanalyzable_reason(stock_name, in_db=True),
+        }
+
+        # 분석 불가 결과도 캐싱
+        if use_cache:
+            try:
+                cache_client = get_redis_client()
+                cache_key = generate_cache_key(request)
+                cache_client.setex(
+                    cache_key, 3600, json.dumps(result, ensure_ascii=False)
+                )
+            except Exception as e:
+                print(f"Redis 캐시 저장 실패 (무시하고 계속): {e}")
+
+        return result
+
+    # ===== 5. K-means 모델로 스타일 태그 생성 =====
     df = pd.DataFrame(
         [
             {
@@ -106,32 +226,36 @@ def analyze_stock(request: StockAnalyzeRequest, use_cache: bool = True):
     features = ["시가총액", "per", "pbr", "ROE", "부채비율", "배당수익률"]
 
     try:
+        # inf, nan 처리
+        df[features] = df[features].replace([np.inf, -np.inf], np.nan)
+        df[features] = df[features].fillna(0)
+
         scaled = scaler.transform(df[features])
         pred_group = model.predict(scaled)[0]
+
+        # ✅ 성공: 스타일 태그 생성 완료
+        result = {
+            "stock_code": request.stock_code,
+            "stock_name": stock_name,
+            "final_style_tag": tag_mapping[pred_group],
+            "style_description": description_mapping[pred_group],
+            "analyzable": True,  # ✅ 분석 가능
+            "reason": None,
+        }
+
     except Exception as e:
-        # TODO: 실제 서비스에서는 500 에러를 반환하도록 예외 처리 필요
-        return {"error": f"AI 분석 중 오류 발생: {str(e)}"}
+        # AI 모델 오류
+        print(f"AI 분석 오류: {e}")
+        result = {
+            "stock_code": request.stock_code,
+            "stock_name": stock_name,
+            "final_style_tag": None,
+            "style_description": None,
+            "analyzable": False,
+            "reason": "AI 모델 오류로 투자 스타일 분석에 실패했습니다.",
+        }
 
-    # stock_db에서 한글명 조회 (첫 단어만 추출하여 한글명만 가져옴)
-    try:
-        stock_name_full = stock_db.loc[request.stock_code]["한글명"]
-        # 한글명에 불필요한 텍스트가 붙어있을 수 있으므로 첫 단어만 추출
-        stock_name = (
-            str(stock_name_full).split()[0] if stock_name_full else "알 수 없는 종목"
-        )
-    except KeyError:
-        stock_name = "알 수 없는 종목"  # DB에 없는 경우
-
-    # Spring 서버가 기대하는 응답 형식으로 반환 (영문 필드명, alias 사용)
-    result = {
-        "stock_code": request.stock_code,
-        "stock_name": stock_name,
-        "final_style_tag": tag_mapping[pred_group],  # 스프링 DTO가 기대하는 필드명
-        "style_description": description_mapping[pred_group],
-    }
-
-    # 3. 캐시 저장 (TTL: 1시간 = 3600초)
-    # 재무 지표는 LLM 기업 설명보다 자주 변할 수 있으므로 TTL을 짧게 설정
+    # ===== 6. 캐시 저장 (TTL: 1시간 = 3600초) =====
     if use_cache:
         try:
             cache_client = get_redis_client()
