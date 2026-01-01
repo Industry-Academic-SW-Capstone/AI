@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import List
+from typing import List, Optional
 
 
 class StockAnalyzeRequest(BaseModel):
@@ -18,12 +18,14 @@ class StockAnalyzeRequest(BaseModel):
 
 
 class StockAnalyzeResponse(BaseModel):
-    """Spring 서버가 기대하는 응답 형식"""
+    """Spring 서버가 기대하는 응답 형식 (SPAC/우선주 필터링 포함)"""
 
     stock_code: str = Field(..., alias="단축코드")
     stock_name: str = Field(..., alias="한글명")
-    final_style_tag: str = Field(..., alias="style_tag")  # 스프링 DTO 필드명에 맞춤
-    style_description: str
+    final_style_tag: Optional[str] = Field(None, alias="style_tag")  # 분석 불가 시 None
+    style_description: Optional[str] = None  # 분석 불가 시 None
+    analyzable: bool  # ✅ 추가: 분석 가능 여부
+    reason: Optional[str] = None  # ✅ 추가: 분석 불가 사유
 
     class Config:
         populate_by_name = True  # 한글 필드명과 영문 필드명 둘 다 허용
@@ -33,5 +35,7 @@ class StockAnalyzeResponse(BaseModel):
                 "stock_name": "삼성전자",
                 "final_style_tag": "[초대형 우량주]",
                 "style_description": "대한민국 대표 우량주...",
+                "analyzable": True,
+                "reason": None,
             }
         }

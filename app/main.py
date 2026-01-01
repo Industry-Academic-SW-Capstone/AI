@@ -15,8 +15,8 @@ from prometheus_fastapi_instrumentator import Instrumentator
 
 app = FastAPI(
     title="Stock AI Analyze Server",
-    version="0.1.17",
-    description="AI 기반 주식 분석 및 기업 설명 서비스",
+    version="0.1.18",
+    description="AI 기반 주식 분석 및 기업 설명 서비스 (SPAC/우선주 필터링 포함)",
 )
 
 # CORS 미들웨어 추가
