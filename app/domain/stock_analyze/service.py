@@ -9,6 +9,7 @@ import re
 from pathlib import Path
 from numpy.linalg import norm
 from .dto import StockAnalyzeRequest, StockAnalyzeResponse
+from app.ai_models.scoring import growth_score, stability_score, composite_score, DEFAULT_WEIGHTS
 
 
 # 모델, 스케일러, DB 로드 (절대 경로 사용)
@@ -233,7 +234,15 @@ def analyze_stock(request: StockAnalyzeRequest, use_cache: bool = True):
         scaled = scaler.transform(df[features])
         pred_group = model.predict(scaled)[0]
 
-        # ✅ 성공: 스타일 태그 생성 완료
+        # ✅ 성공: 스타일 태그 생성 완료 + 멀티팩터 스코어링 (Step 3)
+        g_score = growth_score(roe=request.roe, per=request.per)
+        s_score = stability_score(
+            debt_ratio=request.debt_ratio,
+            dividend_yield=request.dividend_yield,
+        )
+        # 개별 종목 분석 시 유사도 정보 없으므로 중립값(50) 사용
+        c_score = composite_score(50.0, g_score, s_score, DEFAULT_WEIGHTS)
+
         result = {
             "stock_code": request.stock_code,
             "stock_name": stock_name,
@@ -241,6 +250,12 @@ def analyze_stock(request: StockAnalyzeRequest, use_cache: bool = True):
             "style_description": description_mapping[pred_group],
             "analyzable": True,  # ✅ 분석 가능
             "reason": None,
+            "scores": {
+                "growth_score": g_score,
+                "stability_score": s_score,
+                "similarity_score": 50.0,
+                "composite_score": c_score,
+            },
         }
 
     except Exception as e:

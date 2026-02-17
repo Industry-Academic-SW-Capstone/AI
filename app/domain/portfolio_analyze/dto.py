@@ -29,11 +29,20 @@ class PortfolioAnalyzeRequest(BaseModel):
 # --- 응답 DTO (final_analyzer.py에 맞춰 전면 수정) ---
 
 
+class StockScoreDetail(BaseModel):
+    """멀티팩터 스코어링 결과 (Step 3)"""
+    growth_score: float
+    stability_score: float
+    similarity_score: float
+    composite_score: float
+
+
 class StockDetail(BaseModel):
     stock_code: str
     stock_name: str
     style_tag: str
     description: str  # '주린이 해설'이 여기에 담깁니다.
+    scores: Optional[StockScoreDetail] = None  # Step 3: 멀티팩터 스코어
 
 
 class StyleBreakdown(BaseModel):

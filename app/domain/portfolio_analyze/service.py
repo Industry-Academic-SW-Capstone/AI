@@ -4,6 +4,12 @@ import joblib
 from pathlib import Path
 from numpy.linalg import norm
 from app.ai_models import persona_definitions as pd_data  # '근거', '철학'을 모두 임포트
+from app.ai_models.scoring import (
+    cosine_similarity,
+    cosine_similarity_to_score,
+    score_stock,
+    PERSONA_WEIGHTS,
+)
 from .dto import PortfolioAnalyzeRequest
 
 # 모델, 스케일러, DB 로드 (절대 경로 사용)
@@ -75,15 +81,17 @@ def get_portfolio_style_vector(stocks_df: pd.DataFrame):
 
 
 def calculate_persona_match(user_vector):
+    """코사인 유사도 기반 페르소나 매칭 (Step 3 개선)"""
     results = {}
     for name, persona_style_dict in pd_data.ALL_PERSONAS.items():
         all_groups = np.arange(8)
         persona_vector = (
             pd.Series(persona_style_dict).reindex(all_groups, fill_value=0.0).values
         )
-        distance = norm(user_vector - persona_vector)
-        max_distance = np.sqrt(2.0)
-        similarity = max(0, 100 - ((distance / max_distance) * 100))
+        # 유클리드 거리 → 코사인 유사도로 변경
+        sim = cosine_similarity(user_vector, persona_vector)
+        # [-1, 1] → [0, 100] 변환
+        similarity = cosine_similarity_to_score(sim)
         results[name] = round(similarity, 2)
     return results
 
@@ -146,12 +154,33 @@ def analyze_portfolio(request: PortfolioAnalyzeRequest):
     stock_details = []
     for _, row in df_with_names.iterrows():
         if pd.notna(row["final_style_tag"]):
+            # Step 3: 종목별 멀티팩터 스코어 계산
+            cluster_vec = np.zeros(8)
+            cluster_vec[int(row["group_tag"])] = 1.0
+
+            scores = score_stock(
+                stock_features={
+                    "roe": row["ROE"],
+                    "per": row["per"],
+                    "debt_ratio": row["부채비율"],
+                    "dividend_yield": row["배당수익률"],
+                },
+                user_vector=style_vector,
+                stock_cluster_vector=cluster_vec,
+            )
+
             stock_details.append(
                 {
                     "stock_code": row["단축코드"],  # Spring 서버 형식으로 반환
                     "stock_name": row["한글명"],
                     "style_tag": row["final_style_tag"],
                     "description": row["style_description"],
+                    "scores": {
+                        "growth_score": scores["growth_score"],
+                        "stability_score": scores["stability_score"],
+                        "similarity_score": scores["similarity_score"],
+                        "composite_score": scores["composite_score"],
+                    },
                 }
             )
 
