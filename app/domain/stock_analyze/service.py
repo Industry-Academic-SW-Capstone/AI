@@ -9,7 +9,11 @@ import re
 from pathlib import Path
 from numpy.linalg import norm
 from .dto import StockAnalyzeRequest, StockAnalyzeResponse
-from app.ai_models.scoring import growth_score, stability_score, composite_score, DEFAULT_WEIGHTS
+from app.ai_models.scoring import (
+    growth_score, stability_score, composite_score, DEFAULT_WEIGHTS,
+    score_all_stocks, compute_user_feature_vector,
+)
+from .recommend_dto import RecommendRequest
 
 
 # 모델, 스케일러, DB 로드 (절대 경로 사용)
@@ -280,3 +284,62 @@ def analyze_stock(request: StockAnalyzeRequest, use_cache: bool = True):
             print(f"Redis 캐시 저장 실패 (무시하고 계속): {e}")
 
     return result
+
+
+def recommend_stocks(request) -> dict:
+    """
+    사용자 포트폴리오 기반 종목 추천 (Step 3)
+
+    2단계 유사도 계산:
+    - 피처 유사도 (70%): 스케일링된 6차원 재무지표 벡터 간 코사인 유사도
+    - 클러스터 유사도 (30%): 8차원 스타일 벡터 간 코사인 유사도
+    """
+    from app.domain.portfolio_analyze.service import get_portfolio_style_vector
+
+    # 사용자 보유 종목 데이터 준비
+    stocks_data = []
+    portfolio_rows = []
+    for s in request.stocks:
+        stocks_data.append({
+            "market_cap": s.market_cap,
+            "per": s.per,
+            "pbr": s.pbr,
+            "roe": s.roe,
+            "debt_ratio": s.debt_ratio,
+            "dividend_yield": s.dividend_yield,
+            "investment_amount": s.investment_amount,
+        })
+        portfolio_rows.append({
+            "단축코드": s.stock_code,
+            "시가총액": s.market_cap,
+            "per": s.per,
+            "pbr": s.pbr,
+            "ROE": s.roe,
+            "부채비율": s.debt_ratio,
+            "배당수익률": s.dividend_yield,
+            "투자금액": s.investment_amount,
+        })
+
+    # 6차원 피처 벡터 (스케일링된 가중평균)
+    user_feature_vec = compute_user_feature_vector(stocks_data, scaler)
+
+    # 8차원 클러스터 벡터 (투자비중 기반)
+    portfolio_df = pd.DataFrame(portfolio_rows)
+    user_cluster_vec, _ = get_portfolio_style_vector(portfolio_df)
+
+    # 전체 종목 스코어링
+    results = score_all_stocks(
+        stock_db=stock_db,
+        scaler=scaler,
+        model=model,
+        user_feature_vector=user_feature_vec,
+        user_cluster_vector=user_cluster_vec if user_cluster_vec is not None else None,
+        persona=request.persona,
+        top_n=request.top_n,
+    )
+
+    return {
+        "persona": request.persona,
+        "total_scored": len(stock_db),
+        "recommendations": results,
+    }

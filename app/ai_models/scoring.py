@@ -216,23 +216,31 @@ def score_all_stocks(
     stock_db: pd.DataFrame,
     scaler,
     model,
-    user_vector: np.ndarray = None,
+    user_feature_vector: np.ndarray = None,
+    user_cluster_vector: np.ndarray = None,
     persona: str = None,
     top_n: int = 10,
 ) -> list:
     """
     전체 종목 DB에서 종합 점수 기준 상위 N개 추천
 
+    유사도를 2단계로 계산합니다:
+    - 피처 유사도 (70%): 스케일링된 6차원 재무지표 벡터 간 코사인 유사도
+      → 같은 클러스터 내에서도 종목별로 다른 점수 (변별력 높음)
+    - 클러스터 유사도 (30%): 8차원 클러스터 벡터 간 코사인 유사도
+      → 투자 스타일 그룹 수준의 매칭
+
     Args:
-        stock_db: 전체 종목 DataFrame (시가총액, per, pbr, ROE, 부채비율, 배당수익률)
+        stock_db: 전체 종목 DataFrame
         scaler: StandardScaler (학습된 스케일러)
         model: KMeans 모델
-        user_vector: 사용자 포트폴리오 스타일 벡터 (8차원)
+        user_feature_vector: 사용자 포트폴리오의 가중평균 스케일링 벡터 (6차원)
+        user_cluster_vector: 사용자 포트폴리오 스타일 벡터 (8차원)
         persona: 페르소나 이름
         top_n: 상위 몇 개 반환할지
 
     Returns:
-        [{"stock_code", "stock_name", "composite_score", "growth_score", "stability_score", "similarity_score", "style_tag"}, ...]
+        [{"stock_code", "stock_name", "composite_score", ...}, ...]
     """
     from app.domain.stock_analyze.service import tag_mapping, is_valid_stock_for_analysis
 
@@ -248,27 +256,44 @@ def score_all_stocks(
     # inf/nan 처리
     df[features] = df[features].replace([np.inf, -np.inf], np.nan).fillna(0)
 
-    # 클러스터 예측
+    # 스케일링 + 클러스터 예측 (벡터화 연산으로 한번에)
     scaled = scaler.transform(df[features])
     df["cluster"] = model.predict(scaled)
 
-    results = []
-    for idx, row in df.iterrows():
-        # 종목의 클러스터 원-핫 벡터
-        cluster_vec = np.zeros(8)
-        cluster_vec[int(row["cluster"])] = 1.0
+    # 가중치 미리 가져오기
+    weights = PERSONA_WEIGHTS.get(persona, DEFAULT_WEIGHTS)
 
-        scores = score_stock(
-            stock_features={
-                "roe": row["ROE"],
-                "per": row["per"],
-                "debt_ratio": row["부채비율"],
-                "dividend_yield": row["배당수익률"],
-            },
-            user_vector=user_vector,
-            stock_cluster_vector=cluster_vec,
-            persona=persona,
-        )
+    results = []
+    for i, (idx, row) in enumerate(df.iterrows()):
+        # 성장성/안정성 점수
+        g_score = growth_score(roe=row["ROE"], per=row["per"])
+        s_score = stability_score(debt_ratio=row["부채비율"], dividend_yield=row["배당수익률"])
+
+        # === 2단계 유사도 계산 ===
+        if user_feature_vector is not None or user_cluster_vector is not None:
+            sim_score = 50.0  # 기본값
+
+            # (1) 피처 유사도: 스케일링된 6차원 벡터 (70% 비중)
+            feature_sim_score = 50.0
+            if user_feature_vector is not None:
+                stock_scaled_vec = scaled[i]
+                feature_sim = cosine_similarity(user_feature_vector, stock_scaled_vec)
+                feature_sim_score = cosine_similarity_to_score(feature_sim)
+
+            # (2) 클러스터 유사도: 8차원 원-핫 벡터 (30% 비중)
+            cluster_sim_score = 50.0
+            if user_cluster_vector is not None:
+                cluster_vec = np.zeros(8)
+                cluster_vec[int(row["cluster"])] = 1.0
+                cluster_sim = cosine_similarity(user_cluster_vector, cluster_vec)
+                cluster_sim_score = cosine_similarity_to_score(cluster_sim)
+
+            # 혼합 유사도
+            sim_score = round(feature_sim_score * 0.7 + cluster_sim_score * 0.3, 2)
+        else:
+            sim_score = 50.0
+
+        total = composite_score(sim_score, g_score, s_score, weights)
 
         stock_code = idx if isinstance(idx, str) else row.get("단축코드", str(idx))
         stock_name = row.get("clean_name", row.get("한글명", "알 수 없음"))
@@ -279,9 +304,58 @@ def score_all_stocks(
             "stock_code": stock_code,
             "stock_name": stock_name,
             "style_tag": tag_mapping.get(int(row["cluster"]), ""),
-            **scores,
+            "growth_score": g_score,
+            "stability_score": s_score,
+            "similarity_score": sim_score,
+            "composite_score": total,
         })
 
     # 종합 점수 기준 정렬
     results.sort(key=lambda x: x["composite_score"], reverse=True)
     return results[:top_n]
+
+
+def compute_user_feature_vector(stocks_data: list, scaler) -> np.ndarray:
+    """
+    사용자 포트폴리오의 투자금액 가중평균 스케일링 벡터 (6차원) 계산
+
+    Args:
+        stocks_data: [{"market_cap", "per", "pbr", "roe", "debt_ratio", "dividend_yield", "investment_amount"}, ...]
+        scaler: StandardScaler
+
+    Returns:
+        6차원 스케일링된 가중평균 벡터
+    """
+    features = ["시가총액", "per", "pbr", "ROE", "부채비율", "배당수익률"]
+
+    rows = []
+    amounts = []
+    for s in stocks_data:
+        amt = s.get("investment_amount", 0)
+        if amt <= 0:
+            continue
+        rows.append([
+            s.get("market_cap", 0),
+            s.get("per", 0),
+            s.get("pbr", 0),
+            s.get("roe", 0),
+            s.get("debt_ratio", 0),
+            s.get("dividend_yield", 0),
+        ])
+        amounts.append(amt)
+
+    if not rows:
+        return None
+
+    df = pd.DataFrame(rows, columns=features)
+    df = df.replace([np.inf, -np.inf], np.nan).fillna(0)
+
+    # 스케일링
+    scaled = scaler.transform(df)
+
+    # 투자금액 비중으로 가중평균
+    amounts = np.array(amounts)
+    weights = amounts / amounts.sum()
+    weighted_vector = np.average(scaled, axis=0, weights=weights)
+
+    return weighted_vector
