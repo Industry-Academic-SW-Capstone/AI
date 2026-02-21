@@ -35,6 +35,7 @@ class StockAnalyzeResponse(BaseModel):
     analyzable: bool  # ✅ 추가: 분석 가능 여부
     reason: Optional[str] = None  # ✅ 추가: 분석 불가 사유
     scores: Optional[ScoreDetail] = None  # ✅ Step 3: 멀티팩터 스코어
+    report: Optional[str] = None  # ✅ Step 4: AI 투자 분석 리포트
 
     class Config:
         populate_by_name = True  # 한글 필드명과 영문 필드명 둘 다 허용
