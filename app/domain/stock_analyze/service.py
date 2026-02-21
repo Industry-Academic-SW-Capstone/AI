@@ -247,6 +247,35 @@ def analyze_stock(request: StockAnalyzeRequest, use_cache: bool = True):
         # 개별 종목 분석 시 유사도 정보 없으므로 중립값(50) 사용
         c_score = composite_score(50.0, g_score, s_score, DEFAULT_WEIGHTS)
 
+        # ✅ Step 4: 뉴스 RAG + 리포트 생성
+        report_text = None
+        try:
+            from app.infrastructure.news_pipeline import collect_and_store_news
+            from app.infrastructure.gemini_embedding_client import embed_text
+            from app.infrastructure.pgvector_client import search_similar_news
+            from app.infrastructure.report_generator import generate_report
+
+            # 뉴스 수집 → 임베딩 → DB 저장 (이미 있으면 skip)
+            collect_and_store_news(request.stock_code, stock_name, display=10)
+
+            # RAG 검색
+            query_vec = embed_text(f"{stock_name} 투자 분석")
+            news_list = search_similar_news(request.stock_code, query_vec, top_k=5, days=30)
+
+            # 리포트 생성
+            report_text = generate_report(
+                stock_code=request.stock_code,
+                stock_name=stock_name,
+                style_tag=tag_mapping[pred_group],
+                growth_score=g_score,
+                stability_score=s_score,
+                similarity_score=50.0,
+                composite_score=c_score,
+                news_list=news_list,
+            )
+        except Exception as e:
+            print(f"리포트 생성 실패 (무시하고 계속): {e}")
+
         result = {
             "stock_code": request.stock_code,
             "stock_name": stock_name,
@@ -260,6 +289,7 @@ def analyze_stock(request: StockAnalyzeRequest, use_cache: bool = True):
                 "similarity_score": 50.0,
                 "composite_score": c_score,
             },
+            "report": report_text,  # ✅ Step 4: AI 투자 분석 리포트
         }
 
     except Exception as e:

@@ -5,6 +5,10 @@ uvicorn[standard]==0.23.1
 # --- 모니터링용 ---
 prometheus-fastapi-instrumentator
 
+# --- pgvector (뉴스 RAG) ---
+psycopg2-binary==2.9.9
+pgvector==0.3.6
+
 # --- AI 모델 및 데이터 처리 ---
 
 pandas
