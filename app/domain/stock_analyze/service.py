@@ -249,20 +249,24 @@ def analyze_stock(request: StockAnalyzeRequest, use_cache: bool = True):
 
         # ✅ Step 4: 뉴스 RAG + 리포트 생성
         report_text = None
+        news_list = []
+
+        # RAG 뉴스 검색 (pgvector 없어도 계속 진행)
         try:
             from app.infrastructure.news_pipeline import collect_and_store_news
             from app.infrastructure.gemini_embedding_client import embed_text
             from app.infrastructure.pgvector_client import search_similar_news
-            from app.infrastructure.report_generator import generate_report
 
-            # 뉴스 수집 → 임베딩 → DB 저장 (이미 있으면 skip)
             collect_and_store_news(request.stock_code, stock_name, display=10)
-
-            # RAG 검색
             query_vec = embed_text(f"{stock_name} 투자 분석")
             news_list = search_similar_news(request.stock_code, query_vec, top_k=5, days=30)
+        except Exception as e:
+            print(f"RAG 뉴스 검색 실패 (뉴스 없이 리포트 생성): {e}")
 
-            # 리포트 생성
+        # 리포트 생성 (뉴스 없어도 Gemini로 생성)
+        try:
+            from app.infrastructure.report_generator import generate_report
+
             report_text = generate_report(
                 stock_code=request.stock_code,
                 stock_name=stock_name,
