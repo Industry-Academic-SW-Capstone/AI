@@ -101,9 +101,5 @@ jobs:
           docker compose -f docker-compose.prod.yml pull
           docker compose -f docker-compose.prod.yml up -d
 
-          # Redis 캐시 초기화 (구버전 캐시 제거)
-          sleep 5
-          docker exec stock-ai-redis redis-cli FLUSHDB || true
-
           # 오래된 Docker 이미지 정리
           docker image prune -af --filter "until=24h" || true
