@@ -96,12 +96,8 @@ jobs:
           export NAVER_CLIENT_ID=${{ secrets.NAVER_CLIENT_ID }}
           export NAVER_CLIENT_SECRET=${{ secrets.NAVER_CLIENT_SECRET }}
 
-          # 충돌하는 컨테이너 강제 제거 (이전 배포 잔여 컨테이너 처리)
-          docker stop stock-ai-server stock-ai-redis stock-ai-pgvector 2>/dev/null || true
-          docker rm -f stock-ai-server stock-ai-redis stock-ai-pgvector 2>/dev/null || true
-
           # Docker Compose 실행
-          docker compose -f docker-compose.prod.yml down --remove-orphans
+          docker compose -f docker-compose.prod.yml down
           docker compose -f docker-compose.prod.yml pull
           docker compose -f docker-compose.prod.yml up -d
 
