@@ -15,3 +15,10 @@ joblib
 google-genai
 redis
 cachetools
+
+# --- pgvector (뉴스 RAG) ---
+psycopg2-binary==2.9.9
+pgvector==0.3.6
+
+# --- 뉴스 검색 ---
+requests
