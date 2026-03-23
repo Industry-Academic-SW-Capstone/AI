@@ -129,6 +129,104 @@ def get_unanalyzable_reason(stock_name: str, in_db: bool = True) -> str:
         )
 
 
+def score_stock_only(request: StockAnalyzeRequest, use_cache: bool = True) -> dict:
+    """
+    빠른 스코어링만 수행 — 뉴스/LLM 없음 (< 1초 목표)
+
+    /stock/score 엔드포인트용.
+    프론트는 이 결과를 먼저 보여주고, 이후 /stock/report/stream 으로
+    AI 리포트를 스트리밍 받는다.
+    """
+    cache_prefix = "stock_score"
+
+    # 1. 캐시 확인
+    if use_cache:
+        try:
+            cache_client = get_redis_client()
+            cache_key = f"{cache_prefix}:{generate_cache_key(request)}"
+            cached = cache_client.get(cache_key)
+            if cached:
+                return json.loads(cached)
+        except Exception as e:
+            print(f"Redis 캐시 조회 실패 (무시): {e}")
+
+    # 2. AI DB 존재 확인
+    if request.stock_code not in stock_db.index:
+        return {
+            "stock_code": request.stock_code,
+            "stock_name": "알 수 없는 종목",
+            "final_style_tag": None,
+            "style_description": None,
+            "analyzable": False,
+            "reason": get_unanalyzable_reason("", in_db=False),
+            "scores": None,
+        }
+
+    # 3. 종목명 조회
+    try:
+        stock_name_full = stock_db.loc[request.stock_code]["한글명"]
+        stock_name = str(stock_name_full).split()[0] if stock_name_full else "알 수 없는 종목"
+    except KeyError:
+        stock_name = "알 수 없는 종목"
+
+    # 4. SPAC/우선주 필터링
+    if not is_valid_stock_for_analysis(stock_name):
+        return {
+            "stock_code": request.stock_code,
+            "stock_name": stock_name,
+            "final_style_tag": None,
+            "style_description": None,
+            "analyzable": False,
+            "reason": get_unanalyzable_reason(stock_name, in_db=True),
+            "scores": None,
+        }
+
+    # 5. KMeans + 멀티팩터 스코어링
+    df = pd.DataFrame([{
+        "단축코드": request.stock_code,
+        "시가총액": request.market_cap,
+        "per": request.per,
+        "pbr": request.pbr,
+        "ROE": request.roe,
+        "부채비율": request.debt_ratio,
+        "배당수익률": request.dividend_yield,
+    }])
+    features = ["시가총액", "per", "pbr", "ROE", "부채비율", "배당수익률"]
+    df[features] = df[features].replace([np.inf, -np.inf], np.nan).fillna(0)
+    scaled = scaler.transform(df[features])
+    pred_group = model.predict(scaled)[0]
+
+    g_score = growth_score(roe=request.roe, per=request.per)
+    s_score = stability_score(debt_ratio=request.debt_ratio, dividend_yield=request.dividend_yield)
+    c_score = composite_score(50.0, g_score, s_score, DEFAULT_WEIGHTS)
+
+    result = {
+        "stock_code": request.stock_code,
+        "stock_name": stock_name,
+        "final_style_tag": tag_mapping[pred_group],
+        "style_description": description_mapping[pred_group],
+        "analyzable": True,
+        "reason": None,
+        "scores": {
+            "growth_score": g_score,
+            "stability_score": s_score,
+            "similarity_score": 50.0,
+            "composite_score": c_score,
+        },
+    }
+
+    # 캐시 저장 (TTL: 1시간)
+    if use_cache:
+        try:
+            cache_client = get_redis_client()
+            cache_key = f"{cache_prefix}:{generate_cache_key(request)}"
+            cache_client.setex(cache_key, 3600, json.dumps(result, ensure_ascii=False))
+        except Exception as e:
+            print(f"Redis 캐시 저장 실패 (무시): {e}")
+
+    return result
+
+
 def analyze_stock(request: StockAnalyzeRequest, use_cache: bool = True):
     """
     주식 분석 with Redis 캐싱 + SPAC/우선주 필터링
