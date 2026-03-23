@@ -165,10 +165,11 @@ async def generate_report_stream(
 
     client = _get_client()
     try:
-        async for chunk in client.aio.models.generate_content_stream(
+        stream = await client.aio.models.generate_content_stream(
             model="models/gemini-2.5-flash",
             contents=prompt,
-        ):
+        )
+        async for chunk in stream:
             if chunk.text:
                 yield chunk.text
     except Exception as e:
