@@ -2,6 +2,16 @@ from pydantic import BaseModel, Field
 from typing import List, Optional
 
 
+class ReportStreamRequest(BaseModel):
+    """AI 투자 리포트 스트리밍 요청 (스코어링 완료 후 별도 호출)"""
+    stock_code: str
+    stock_name: str
+    style_tag: str
+    growth_score: float
+    stability_score: float
+    composite_score: float
+
+
 class StockAnalyzeRequest(BaseModel):
     """Spring 서버와의 연동을 위해 영문 필드명 사용 (한글도 alias로 지원)"""
 

@@ -6,6 +6,7 @@ Step 4-5: 리포트 생성기
 import os
 import logging
 import time
+from typing import AsyncGenerator
 
 from google import genai
 from google.genai.errors import ClientError
@@ -132,3 +133,45 @@ def generate_report(
             break
 
     return f"{stock_name}({stock_code})의 종합 점수는 {composite_score}점입니다. (현재 AI 분석량이 많아 상세 리포트를 생성하지 못했습니다.)"
+
+
+async def generate_report_stream(
+    stock_code: str,
+    stock_name: str,
+    style_tag: str,
+    growth_score: float,
+    stability_score: float,
+    similarity_score: float,
+    composite_score: float,
+    news_list: list[dict],
+) -> AsyncGenerator[str, None]:
+    """
+    Gemini 스트리밍으로 리포트를 토큰 단위로 생성 (SSE용)
+
+    Yields:
+        str: Gemini가 생성하는 텍스트 청크
+    """
+    news_section = _format_news_section(news_list)
+    prompt = REPORT_PROMPT.format(
+        stock_code=stock_code,
+        stock_name=stock_name,
+        style_tag=style_tag,
+        growth_score=growth_score,
+        stability_score=stability_score,
+        similarity_score=similarity_score,
+        composite_score=composite_score,
+        news_section=news_section,
+    )
+
+    client = _get_client()
+    try:
+        stream = await client.aio.models.generate_content_stream(
+            model="models/gemini-2.5-flash",
+            contents=prompt,
+        )
+        async for chunk in stream:
+            if chunk.text:
+                yield chunk.text
+    except Exception as e:
+        logger.error("스트리밍 리포트 생성 실패: %s", e)
+        yield f"\n\n{stock_name}({stock_code})의 종합 점수는 {composite_score}점입니다. (스트리밍 오류로 상세 리포트를 생성하지 못했습니다.)"
