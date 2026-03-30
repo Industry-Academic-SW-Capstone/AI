@@ -11,7 +11,8 @@ from numpy.linalg import norm
 from .dto import StockAnalyzeRequest, StockAnalyzeResponse
 from app.ai_models.scoring import (
     growth_score, stability_score, composite_score, DEFAULT_WEIGHTS,
-    score_all_stocks, compute_user_feature_vector,
+    PERSONA_WEIGHTS, score_all_stocks, compute_user_feature_vector,
+    cosine_similarity as cos_sim, cosine_similarity_to_score,
 )
 from .recommend_dto import RecommendRequest
 
@@ -198,7 +199,46 @@ def score_stock_only(request: StockAnalyzeRequest, use_cache: bool = True) -> di
 
     g_score = growth_score(roe=request.roe, per=request.per)
     s_score = stability_score(debt_ratio=request.debt_ratio, dividend_yield=request.dividend_yield)
-    c_score = composite_score(50.0, g_score, s_score, DEFAULT_WEIGHTS)
+
+    # 유사도 계산: 포트폴리오가 있으면 실제 계산, 없으면 50.0 (중립)
+    sim_score = 50.0
+    if request.portfolio_stocks and len(request.portfolio_stocks) > 0:
+        try:
+            from app.domain.portfolio_analyze.service import get_portfolio_style_vector
+
+            # 유저 6차원 피처 벡터 (가중평균)
+            stocks_data = [{
+                "market_cap": s.market_cap, "per": s.per, "pbr": s.pbr,
+                "roe": s.roe, "debt_ratio": s.debt_ratio,
+                "dividend_yield": s.dividend_yield,
+                "investment_amount": s.investment_amount,
+            } for s in request.portfolio_stocks]
+            user_feature_vec = compute_user_feature_vector(stocks_data, scaler)
+
+            # 유저 8차원 클러스터 벡터
+            portfolio_df = pd.DataFrame([{
+                "단축코드": s.stock_code, "시가총액": s.market_cap,
+                "per": s.per, "pbr": s.pbr, "ROE": s.roe,
+                "부채비율": s.debt_ratio, "배당수익률": s.dividend_yield,
+                "투자금액": s.investment_amount,
+            } for s in request.portfolio_stocks])
+            user_cluster_vec, _ = get_portfolio_style_vector(portfolio_df)
+
+            # 종목의 클러스터 벡터 (one-hot)
+            stock_cluster_vec = np.zeros(8)
+            stock_cluster_vec[pred_group] = 1.0
+
+            # 2단계 유사도: 피처(70%) + 클러스터(30%)
+            feature_sim = cosine_similarity_to_score(cos_sim(user_feature_vec, scaled[0]))
+            cluster_sim = cosine_similarity_to_score(cos_sim(user_cluster_vec, stock_cluster_vec))
+            sim_score = feature_sim * 0.7 + cluster_sim * 0.3
+        except Exception as e:
+            print(f"유사도 계산 실패 (기본값 50 사용): {e}")
+            sim_score = 50.0
+
+    # 페르소나 가중치 적용
+    weights = PERSONA_WEIGHTS.get(request.persona, DEFAULT_WEIGHTS) if request.persona else DEFAULT_WEIGHTS
+    c_score = composite_score(sim_score, g_score, s_score, weights)
 
     result = {
         "stock_code": request.stock_code,
@@ -210,7 +250,7 @@ def score_stock_only(request: StockAnalyzeRequest, use_cache: bool = True) -> di
         "scores": {
             "growth_score": g_score,
             "stability_score": s_score,
-            "similarity_score": 50.0,
+            "similarity_score": round(sim_score, 2),
             "composite_score": c_score,
         },
     }
