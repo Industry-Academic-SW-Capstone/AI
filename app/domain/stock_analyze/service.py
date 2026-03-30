@@ -68,9 +68,14 @@ def get_redis_client():
 
 
 def generate_cache_key(request: StockAnalyzeRequest) -> str:
-    """요청 데이터로 캐시 키 생성 (재무 지표 변경 시 다른 캐시)"""
-    # 단축코드와 재무 지표들을 조합하여 고유한 해시 생성
+    """요청 데이터로 캐시 키 생성 (재무 지표 + 포트폴리오 + 페르소나 포함)"""
     data_str = f"{request.stock_code}:{request.market_cap}:{request.per}:{request.pbr}:{request.roe}:{request.debt_ratio}:{request.dividend_yield}"
+    # 포트폴리오 + 페르소나가 있으면 캐시 키에 포함 (다른 유저 = 다른 캐시)
+    if request.portfolio_stocks:
+        portfolio_str = ",".join(f"{s.stock_code}:{s.investment_amount}" for s in request.portfolio_stocks)
+        data_str += f":{portfolio_str}"
+    if request.persona:
+        data_str += f":{request.persona}"
     hash_key = hashlib.md5(data_str.encode()).hexdigest()
     return f"stock_analyze:{hash_key}"
 
