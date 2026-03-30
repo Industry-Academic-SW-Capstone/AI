@@ -12,6 +12,18 @@ class ReportStreamRequest(BaseModel):
     composite_score: float
 
 
+class PortfolioStock(BaseModel):
+    """스코어링 시 유사도 계산용 보유 종목 정보"""
+    stock_code: str
+    market_cap: float
+    per: float
+    pbr: float
+    roe: float
+    debt_ratio: float
+    dividend_yield: float
+    investment_amount: float
+
+
 class StockAnalyzeRequest(BaseModel):
     """Spring 서버와의 연동을 위해 영문 필드명 사용 (한글도 alias로 지원)"""
 
@@ -22,6 +34,10 @@ class StockAnalyzeRequest(BaseModel):
     roe: float = Field(..., alias="ROE")
     debt_ratio: float = Field(..., alias="부채비율")
     dividend_yield: float = Field(..., alias="배당수익률")
+
+    # 유사도 계산용 (Optional — 없으면 기존처럼 50.0 사용)
+    portfolio_stocks: Optional[List[PortfolioStock]] = None
+    persona: Optional[str] = None
 
     class Config:
         populate_by_name = True  # 한글 필드명과 영문 필드명 둘 다 허용
