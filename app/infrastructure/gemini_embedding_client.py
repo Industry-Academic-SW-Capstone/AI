@@ -1,6 +1,6 @@
 """
 Gemini 임베딩 클라이언트
-- text-embedding-004 모델 (768차원)
+- gemini-embedding-001 모델 (3072차원)
 - 배치 임베딩 지원
 """
 
@@ -24,13 +24,13 @@ def _get_client() -> genai.Client:
 
 def embed_text(text: str) -> list[float]:
     """
-    단일 텍스트 임베딩 (768차원)
+    단일 텍스트 임베딩 (3072차원)
 
     Args:
         text: 임베딩할 텍스트
 
     Returns:
-        768차원 float 리스트
+        3072차원 float 리스트
     """
     client = _get_client()
     response = client.models.embed_content(
