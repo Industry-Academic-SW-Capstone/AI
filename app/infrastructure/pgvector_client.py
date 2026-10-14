@@ -90,6 +90,26 @@ def insert_news_embeddings(rows: list[dict]) -> int:
     return inserted
 
 
+# 검색 기간(search_similar_news 의 days)보다 짧으면 안 된다.
+RETENTION_DAYS = 30
+
+
+def delete_expired_news(days: int = RETENTION_DAYS) -> int:
+    """검색에 쓰이지 않는 오래된 뉴스를 지운다 (pub_date 가 없으면 수집 시각 기준)"""
+    sql = """
+        DELETE FROM news_embeddings
+        WHERE pub_date < NOW() - make_interval(days => %s)
+           OR (pub_date IS NULL AND created_at < NOW() - make_interval(days => %s))
+    """
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, (days, days))
+            deleted = cur.rowcount
+    if deleted:
+        logger.info("deleted %d expired news embeddings", deleted)
+    return deleted
+
+
 def search_similar_news(
     stock_code: str,
     query_embedding: list[float],

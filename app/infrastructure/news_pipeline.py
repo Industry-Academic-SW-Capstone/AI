@@ -7,7 +7,7 @@ import logging
 
 from app.infrastructure.naver_news_client import search_stock_news
 from app.infrastructure.gemini_embedding_client import embed_texts
-from app.infrastructure.pgvector_client import insert_news_embeddings
+from app.infrastructure.pgvector_client import delete_expired_news, insert_news_embeddings
 
 logger = logging.getLogger(__name__)
 
@@ -45,6 +45,8 @@ def collect_and_store_news(
     # 4. DB 저장용 데이터 조합
     rows = []
     for news, embedding in zip(news_list, embeddings):
+        if embedding is None:
+            continue
         rows.append({
             "stock_code": stock_code,
             "stock_name": stock_name,
@@ -58,4 +60,10 @@ def collect_and_store_news(
     # 5. pgvector 벌크 INSERT
     inserted = insert_news_embeddings(rows)
     logger.info("[%s] %s: %d건 수집, %d건 저장", stock_code, stock_name, len(rows), inserted)
+
+    # 6. 검색 기간이 지난 뉴스 정리 (지우지 않으면 리포트를 열 때마다 쌓이기만 한다)
+    try:
+        delete_expired_news()
+    except Exception as e:
+        logger.warning("오래된 뉴스 정리 실패 (무시): %s", e)
     return inserted

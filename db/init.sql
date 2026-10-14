@@ -10,7 +10,7 @@ CREATE TABLE IF NOT EXISTS news_embeddings (
     description TEXT,                           -- 뉴스 요약
     link        TEXT,                           -- 원문 URL
     pub_date    TIMESTAMP,                      -- 기사 발행일
-    embedding   vector(3072),                   -- Gemini gemini-embedding-001 (3072차원)
+    embedding   vector(768),                    -- Gemini gemini-embedding-001 (768차원으로 축소, 정규화)
     created_at  TIMESTAMP DEFAULT NOW(),
 
     -- 중복 방지: 같은 종목 + 같은 링크
@@ -21,7 +21,5 @@ CREATE TABLE IF NOT EXISTS news_embeddings (
 CREATE INDEX IF NOT EXISTS idx_news_stock_code ON news_embeddings (stock_code);
 CREATE INDEX IF NOT EXISTS idx_news_pub_date   ON news_embeddings (pub_date DESC);
 
--- HNSW 벡터 인덱스 (코사인 유사도 기반)
-CREATE INDEX IF NOT EXISTS idx_news_embedding ON news_embeddings
-    USING hnsw (embedding vector_cosine_ops)
-    WITH (m = 16, ef_construction = 64);
+-- 벡터 인덱스(HNSW)는 두지 않는다. 검색이 stock_code·최근 30일로 먼저 좁혀져 종목당 수십~수백 건만
+-- 비교하면 되고, 근사 인덱스는 필터를 나중에 적용해 상위 K건을 다 채우지 못할 수 있다.
