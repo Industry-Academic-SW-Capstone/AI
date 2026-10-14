@@ -2,9 +2,6 @@
 fastapi==0.121.0
 uvicorn[standard]==0.23.1
 
-# --- 모니터링용 ---
-prometheus-fastapi-instrumentator
-
 # --- AI 모델 및 데이터 처리 ---
 numpy
 pandas
@@ -13,7 +10,6 @@ joblib
 
 # --- Gemini LLM 및 캐싱 ---
 google-genai
-redis
 cachetools
 
 # --- pgvector (뉴스 RAG) ---

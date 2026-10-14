@@ -1,13 +1,13 @@
 import pandas as pd
 import numpy as np
 import joblib
-import json
 import hashlib
 import os
-import redis
 import re
+import threading
 from pathlib import Path
 from numpy.linalg import norm
+from cachetools import TTLCache
 from .dto import StockAnalyzeRequest, StockAnalyzeResponse
 from app.ai_models.scoring import (
     growth_score, stability_score, composite_score, DEFAULT_WEIGHTS,
@@ -54,17 +54,20 @@ description_mapping = {
 }
 
 
-# Redis 클라이언트 초기화
-def get_redis_client():
-    """Redis 클라이언트 반환"""
-    redis_host = os.getenv("REDIS_HOST", "localhost")
-    redis_port = int(os.getenv("REDIS_PORT", "6379"))
-    return redis.Redis(
-        host=redis_host,
-        port=redis_port,
-        decode_responses=True,
-        socket_connect_timeout=2,
-    )
+# 분석 결과 캐시 (TTL 1시간). 리포트 생성이 Gemini 를 부르므로 같은 요청을 다시 계산하지 않는다.
+# 동기 엔드포인트는 스레드풀에서 돌아 TTLCache 접근을 잠근다.
+_cache = TTLCache(maxsize=2048, ttl=3600)
+_cache_lock = threading.Lock()
+
+
+def _cache_get(key: str):
+    with _cache_lock:
+        return _cache.get(key)
+
+
+def _cache_set(key: str, value: dict) -> None:
+    with _cache_lock:
+        _cache[key] = value
 
 
 def generate_cache_key(request: StockAnalyzeRequest) -> str:
@@ -147,14 +150,9 @@ def score_stock_only(request: StockAnalyzeRequest, use_cache: bool = True) -> di
 
     # 1. 캐시 확인
     if use_cache:
-        try:
-            cache_client = get_redis_client()
-            cache_key = f"{cache_prefix}:{generate_cache_key(request)}"
-            cached = cache_client.get(cache_key)
-            if cached:
-                return json.loads(cached)
-        except Exception as e:
-            print(f"Redis 캐시 조회 실패 (무시): {e}")
+        cached = _cache_get(f"{cache_prefix}:{generate_cache_key(request)}")
+        if cached:
+            return cached
 
     # 2. AI DB 존재 확인
     if request.stock_code not in stock_db.index:
@@ -262,19 +260,14 @@ def score_stock_only(request: StockAnalyzeRequest, use_cache: bool = True) -> di
 
     # 캐시 저장 (TTL: 1시간)
     if use_cache:
-        try:
-            cache_client = get_redis_client()
-            cache_key = f"{cache_prefix}:{generate_cache_key(request)}"
-            cache_client.setex(cache_key, 3600, json.dumps(result, ensure_ascii=False))
-        except Exception as e:
-            print(f"Redis 캐시 저장 실패 (무시): {e}")
+        _cache_set(f"{cache_prefix}:{generate_cache_key(request)}", result)
 
     return result
 
 
 def analyze_stock(request: StockAnalyzeRequest, use_cache: bool = True):
     """
-    주식 분석 with Redis 캐싱 + SPAC/우선주 필터링
+    주식 분석 with 메모리 캐싱 + SPAC/우선주 필터링
 
     핵심: 스타일 태그를 생성할 수 있는지 판단하여 analyzable 반환
 
@@ -288,15 +281,9 @@ def analyze_stock(request: StockAnalyzeRequest, use_cache: bool = True):
     """
     # ===== 1. 캐시 확인 =====
     if use_cache:
-        try:
-            cache_client = get_redis_client()
-            cache_key = generate_cache_key(request)
-            cached_result = cache_client.get(cache_key)
-
-            if cached_result:
-                return json.loads(cached_result)
-        except Exception as e:
-            print(f"Redis 캐시 조회 실패 (무시하고 계속): {e}")
+        cached_result = _cache_get(generate_cache_key(request))
+        if cached_result:
+            return cached_result
 
     # ===== 2. AI 학습 DB에 있는지 확인 (핵심!) =====
     if request.stock_code not in stock_db.index:
@@ -312,14 +299,7 @@ def analyze_stock(request: StockAnalyzeRequest, use_cache: bool = True):
 
         # 분석 불가 결과도 캐싱 (TTL: 1시간)
         if use_cache:
-            try:
-                cache_client = get_redis_client()
-                cache_key = generate_cache_key(request)
-                cache_client.setex(
-                    cache_key, 3600, json.dumps(result, ensure_ascii=False)
-                )
-            except Exception as e:
-                print(f"Redis 캐시 저장 실패 (무시하고 계속): {e}")
+            _cache_set(generate_cache_key(request), result)
 
         return result
 
@@ -346,14 +326,7 @@ def analyze_stock(request: StockAnalyzeRequest, use_cache: bool = True):
 
         # 분석 불가 결과도 캐싱
         if use_cache:
-            try:
-                cache_client = get_redis_client()
-                cache_key = generate_cache_key(request)
-                cache_client.setex(
-                    cache_key, 3600, json.dumps(result, ensure_ascii=False)
-                )
-            except Exception as e:
-                print(f"Redis 캐시 저장 실패 (무시하고 계속): {e}")
+            _cache_set(generate_cache_key(request), result)
 
         return result
 
@@ -453,12 +426,7 @@ def analyze_stock(request: StockAnalyzeRequest, use_cache: bool = True):
 
     # ===== 6. 캐시 저장 (TTL: 1시간 = 3600초) =====
     if use_cache:
-        try:
-            cache_client = get_redis_client()
-            cache_key = generate_cache_key(request)
-            cache_client.setex(cache_key, 3600, json.dumps(result, ensure_ascii=False))
-        except Exception as e:
-            print(f"Redis 캐시 저장 실패 (무시하고 계속): {e}")
+        _cache_set(generate_cache_key(request), result)
 
     return result
 

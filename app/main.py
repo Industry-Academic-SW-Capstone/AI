@@ -8,15 +8,11 @@ from fastapi.middleware.cors import CORSMiddleware
 # ✅ 올바른 경로
 from app.domain.stock_analyze.controller import router as stock_router
 from app.domain.portfolio_analyze.controller import router as portfolio_router
-from app.domain.company_describe.controller import router as company_router
-from app.domain.performance_test.controller import router as performance_router
-
-from prometheus_fastapi_instrumentator import Instrumentator
 
 app = FastAPI(
     title="Stock AI Analyze Server",
     version="0.2.0",
-    description="AI 기반 주식 분석 및 기업 설명 서비스 (SPAC/우선주 필터링 + 멀티팩터 스코어링)",
+    description="AI 기반 주식 분석 서비스 (SPAC/우선주 필터링 + 멀티팩터 스코어링)",
 )
 
 # CORS 미들웨어 추가
@@ -28,9 +24,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-Instrumentator().instrument(app).expose(app)
-
-
 @app.on_event("startup")
 async def startup():
     pass
@@ -38,10 +31,6 @@ async def startup():
 
 app.include_router(stock_router, prefix="/stock", tags=["Stock Analyze"])
 app.include_router(portfolio_router, prefix="/portfolio", tags=["Portfolio Analyze"])
-app.include_router(company_router, prefix="/company", tags=["Company Describe"])
-app.include_router(
-    performance_router, prefix="/test/performance", tags=["Performance Test"]
-)
 
 
 @app.get("/")

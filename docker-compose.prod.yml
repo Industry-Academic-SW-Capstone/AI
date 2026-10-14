@@ -1,16 +1,6 @@
 version: '3.8'
 
 services:
-  redis:
-    image: redis:7-alpine
-    container_name: stock-ai-redis
-    volumes:
-      - redis-data:/data
-    command: redis-server --appendonly yes
-    restart: unless-stopped
-    networks:
-      - stock-ai-network
-
   pgvector:
     image: pgvector/pgvector:pg16
     container_name: stock-ai-pgvector
@@ -32,8 +22,6 @@ services:
       - "8000:8000"
     environment:
       - GEMINI_API_KEY=${GEMINI_API_KEY}
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
       - PGVECTOR_HOST=pgvector
       - PGVECTOR_PORT=5432
       - PGVECTOR_USER=stockai
@@ -42,14 +30,12 @@ services:
       - NAVER_CLIENT_ID=${NAVER_CLIENT_ID}
       - NAVER_CLIENT_SECRET=${NAVER_CLIENT_SECRET}
     depends_on:
-      - redis
       - pgvector
     restart: unless-stopped
     networks:
       - stock-ai-network
 
 volumes:
-  redis-data:
   pgvector-data:
 
 networks:
