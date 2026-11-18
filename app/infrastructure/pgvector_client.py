@@ -6,6 +6,7 @@ pgvector 연결 및 쿼리 헬퍼
 
 import os
 import logging
+import threading
 from contextlib import contextmanager
 
 import psycopg2
@@ -15,22 +16,63 @@ from psycopg2.extras import execute_values
 logger = logging.getLogger(__name__)
 
 _pool: ThreadedConnectionPool | None = None
+_pool_lock = threading.Lock()
+
+# 뉴스 테이블 정의는 여기 한 곳에만 둔다. 서버가 처음 DB 에 붙을 때 만들고, 있으면 건너뛴다.
+# 벡터 인덱스(HNSW)는 두지 않는다. 검색이 stock_code·최근 30일로 먼저 좁혀져 종목당 수십~수백 건만
+# 비교하면 되고, 근사 인덱스는 필터를 나중에 적용해 상위 K건을 다 채우지 못할 수 있다.
+SCHEMA_SQL = """
+    CREATE EXTENSION IF NOT EXISTS vector;
+
+    CREATE TABLE IF NOT EXISTS news_embeddings (
+        id          BIGSERIAL PRIMARY KEY,
+        stock_code  VARCHAR(20)  NOT NULL,
+        stock_name  VARCHAR(100) NOT NULL,
+        title       TEXT         NOT NULL,
+        description TEXT,
+        link        TEXT,
+        pub_date    TIMESTAMP,
+        embedding   vector(768),  -- gemini_embedding_client.EMBEDDING_DIM 과 맞아야 한다
+        created_at  TIMESTAMP DEFAULT NOW(),
+        CONSTRAINT uq_news_link UNIQUE (stock_code, link)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_news_stock_code ON news_embeddings (stock_code);
+    CREATE INDEX IF NOT EXISTS idx_news_pub_date   ON news_embeddings (pub_date DESC);
+"""
 
 
 def get_pool() -> ThreadedConnectionPool:
     global _pool
-    if _pool is None:
-        _pool = ThreadedConnectionPool(
-            minconn=2,
-            maxconn=10,
-            host=os.getenv("PGVECTOR_HOST", "localhost"),
-            port=int(os.getenv("PGVECTOR_PORT", "5433")),
-            user=os.getenv("PGVECTOR_USER", "stockai"),
-            password=os.getenv("PGVECTOR_PASSWORD", "stockai1234"),
-            dbname=os.getenv("PGVECTOR_DB", "stock_news"),
-        )
-        logger.info("pgvector connection pool created")
+    # 리포트 스트리밍이 스레드풀에서 동시에 처음 부르면 풀이 두 번 만들어질 수 있다.
+    with _pool_lock:
+        if _pool is None:
+            pool = ThreadedConnectionPool(
+                minconn=1,
+                maxconn=10,
+                host=os.getenv("PGVECTOR_HOST", "localhost"),
+                port=int(os.getenv("PGVECTOR_PORT", "5433")),
+                user=os.getenv("PGVECTOR_USER", "stockai"),
+                password=os.getenv("PGVECTOR_PASSWORD", "stockai1234"),
+                dbname=os.getenv("PGVECTOR_DB", "stock_news"),
+            )
+            _ensure_schema(pool)
+            _pool = pool
+            logger.info("pgvector connection pool created")
     return _pool
+
+
+def _ensure_schema(pool: ThreadedConnectionPool) -> None:
+    conn = pool.getconn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(SCHEMA_SQL)
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        pool.putconn(conn)
 
 
 @contextmanager

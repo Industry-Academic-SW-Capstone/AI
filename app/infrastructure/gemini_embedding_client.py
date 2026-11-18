@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 EMBEDDING_MODEL = "models/gemini-embedding-001"
 # MRL 로 학습된 모델이라 앞쪽 768차원만 써도 품질이 거의 같다(MTEB 67.99, 1536차원 68.17).
-# db/init.sql 의 vector(768) 과 맞아야 한다.
+# pgvector_client.SCHEMA_SQL 의 vector(768) 과 맞아야 한다.
 EMBEDDING_DIM = 768
 _EMBED_CONFIG = types.EmbedContentConfig(output_dimensionality=EMBEDDING_DIM)
 
